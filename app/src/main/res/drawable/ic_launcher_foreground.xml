@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- An amanita: red cap with cream spots, cream stem. 108×108, the safe zone is the middle 66. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#EEDEBA" android:pathData="M46,56 L62,56 Q64,72 66,80 Q54,84 42,80 Q44,72 46,56 Z" />
+    <path android:fillColor="#E82424" android:pathData="M28,58 Q28,30 54,28 Q80,30 80,58 Q54,64 28,58 Z" />
+    <path android:fillColor="#EEDEBA" android:pathData="M42,40 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+    <path android:fillColor="#EEDEBA" android:pathData="M60,36 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
+    <path android:fillColor="#EEDEBA" android:pathData="M68,49 m-3.5,0 a3.5,3.5 0 1,0 7,0 a3.5,3.5 0 1,0 -7,0" />
+    <path android:fillColor="#EEDEBA" android:pathData="M51,50 m-2.5,0 a2.5,2.5 0 1,0 5,0 a2.5,2.5 0 1,0 -5,0" />
+    <path android:fillColor="#EEDEBA" android:pathData="M36,52 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" />
+</vector>

@@ -1,0 +1,303 @@
+package dev.kinoko.app.ui
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Stop
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import dev.kinoko.app.data.AgentInfo
+import dev.kinoko.app.data.AssistantItem
+import dev.kinoko.app.data.Connection
+import dev.kinoko.app.data.Item
+import dev.kinoko.app.data.NoticeItem
+import dev.kinoko.app.data.ToolItem
+import dev.kinoko.app.data.Transcript
+import dev.kinoko.app.data.UserItem
+import kotlinx.coroutines.launch
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ChatScreen(
+    agent: AgentInfo?,
+    transcript: Transcript?,
+    connection: Connection,
+    onBack: () -> Unit,
+    onSay: (String) -> Boolean,
+    onFollowUp: (String) -> Unit,
+    onAbort: () -> Unit,
+    onStop: () -> Unit,
+) {
+    val t = transcript ?: Transcript()
+    val list = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    var draft by rememberSaveable { mutableStateOf("") }
+    var menu by remember { mutableStateOf(false) }
+    val haptics = LocalHapticFeedback.current
+    // Follows the bottom while the reply streams, unless the user scrolled up to read.
+    val atBottom by remember { derivedStateOf { !list.canScrollForward } }
+    var follow by remember { mutableStateOf(true) }
+    LaunchedEffect(list.isScrollInProgress) { if (list.isScrollInProgress) follow = atBottom }
+    LaunchedEffect(t.items.size, (t.items.lastOrNull() as? AssistantItem)?.text?.length, t.status) {
+        if (follow && t.items.isNotEmpty()) list.scrollToItem(t.items.size)
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "back") } },
+                title = {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (agent != null) StateDot(agent.state)
+                            Text("  ${agent?.project ?: "agent"}", fontWeight = FontWeight.SemiBold, color = Kinoko.cream, maxLines = 1)
+                        }
+                        Text(
+                            if (connection !is Connection.Online) "reconnecting…" else agent?.modelName ?: "",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (connection !is Connection.Online) Kinoko.amber else Kinoko.muted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                },
+                actions = {
+                    Box {
+                        IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "menu") }
+                        DropdownMenu(menu, { menu = false }) {
+                            DropdownMenuItem(text = { Text("Stop this agent") }, onClick = { menu = false; onStop() })
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Kinoko.night),
+            )
+        },
+    ) { padding ->
+        Column(Modifier.fillMaxSize().padding(padding).imePadding()) {
+            Box(Modifier.weight(1f)) {
+                LazyColumn(state = list, contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxSize()) {
+                    items(t.items, key = { it.key }, contentType = { it::class }) { item -> ChatItem(item) }
+                    item(key = "status") {
+                        androidx.compose.animation.AnimatedVisibility(t.running, enter = fadeIn(), exit = fadeOut()) { Status(t.status, t.queued) }
+                    }
+                }
+                androidx.compose.animation.AnimatedVisibility(!atBottom && !follow, Modifier.align(Alignment.BottomEnd).padding(16.dp), enter = fadeIn(), exit = fadeOut()) {
+                    SmallFloatingActionButton(onClick = { follow = true; scope.launch { list.animateScrollToItem(t.items.size) } }, containerColor = Kinoko.raised) {
+                        Icon(Icons.Outlined.KeyboardArrowDown, "to the end", tint = Kinoko.cream)
+                    }
+                }
+            }
+            Composer(
+                draft = draft,
+                onDraft = { draft = it },
+                running = t.running,
+                onSend = {
+                    val text = draft.trim()
+                    if (text.isNotEmpty() && onSay(text)) {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        draft = ""
+                        follow = true
+                    }
+                },
+                onLater = {
+                    val text = draft.trim()
+                    if (text.isNotEmpty()) { onFollowUp(text); draft = "" }
+                },
+                onAbort = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); onAbort() },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChatItem(item: Item) {
+    when (item) {
+        is UserItem -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            Column(horizontalAlignment = Alignment.End) {
+                if (item.steer) Text("said mid-run", style = MaterialTheme.typography.labelSmall, color = Kinoko.muted)
+                Text(
+                    item.text + if (item.images > 0) "  🖼×${item.images}" else "",
+                    color = Kinoko.night,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.widthIn(max = 320.dp).background(Kinoko.cream, RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp)).padding(horizontal = 14.dp, vertical = 10.dp),
+                )
+            }
+        }
+        is AssistantItem -> Column(Modifier.fillMaxWidth().animateContentSize()) {
+            if (item.thinking.isNotBlank()) Thinking(item.thinking, item.streaming && item.text.isBlank())
+            if (item.text.isNotBlank()) Markdown(item.text)
+        }
+        is ToolItem -> ToolCard(item)
+        is NoticeItem -> Text(
+            item.text,
+            style = MaterialTheme.typography.labelSmall,
+            color = when (item.tone) { NoticeItem.Tone.ERROR -> Kinoko.softRed; NoticeItem.Tone.WARN -> Kinoko.amber; NoticeItem.Tone.INFO -> Kinoko.muted },
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun Thinking(text: String, live: Boolean) {
+    var open by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().padding(bottom = 6.dp).clickable { open = !open }.animateContentSize()) {
+        Text(if (live) "thinking…" else if (open) "thought ▾" else "thought ▸", style = MaterialTheme.typography.labelSmall, color = Kinoko.muted)
+        if (open || live) Text(
+            if (open) text else text.takeLast(240),
+            fontStyle = FontStyle.Italic,
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+            color = Kinoko.muted,
+            maxLines = if (open) Int.MAX_VALUE else 3,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun ToolCard(tool: ToolItem) {
+    var open by remember { mutableStateOf(false) }
+    Column(
+        Modifier.fillMaxWidth().background(Kinoko.panel, RoundedCornerShape(12.dp)).clickable(enabled = tool.output != null) { open = !open }.padding(12.dp).animateContentSize(),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            when {
+                tool.running -> CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = Kinoko.cream)
+                tool.failed -> Icon(Icons.Outlined.Close, null, tint = Kinoko.softRed, modifier = Modifier.size(16.dp))
+                else -> Icon(Icons.Outlined.Check, null, tint = Kinoko.green, modifier = Modifier.size(16.dp))
+            }
+            Spacer(Modifier.width(10.dp))
+            Text(tool.name, fontFamily = Mono, fontSize = 13.sp, color = Kinoko.cream, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.width(8.dp))
+            Text(tool.summary, fontFamily = Mono, fontSize = 13.sp, color = Kinoko.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        }
+        val output = tool.output
+        if (output != null && (open || tool.failed)) {
+            Text(
+                if (open) output.take(20_000) else output.lines().take(4).joinToString("\n"),
+                fontFamily = Mono,
+                fontSize = 12.sp,
+                lineHeight = 17.sp,
+                color = if (tool.failed) Kinoko.softRed else Kinoko.text,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun Status(status: String?, queued: List<String>) {
+    Column(Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = Kinoko.softRed)
+            Text("  ${status ?: "working"}…", style = MaterialTheme.typography.labelSmall, color = Kinoko.muted)
+        }
+        for (q in queued) Text("queued: $q", style = MaterialTheme.typography.labelSmall, color = Kinoko.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun Composer(draft: String, onDraft: (String) -> Unit, running: Boolean, onSend: () -> Unit, onLater: () -> Unit, onAbort: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().background(Kinoko.night).navigationBarsPadding().padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        TextField(
+            draft,
+            onDraft,
+            placeholder = { Text(if (running) "Steer it…" else "Ask the agent…", color = Kinoko.muted) },
+            modifier = Modifier.weight(1f).heightIn(min = 52.dp, max = 180.dp),
+            shape = RoundedCornerShape(26.dp),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Kinoko.panel,
+                unfocusedContainerColor = Kinoko.panel,
+                focusedIndicatorColor = Kinoko.night.copy(alpha = 0f),
+                unfocusedIndicatorColor = Kinoko.night.copy(alpha = 0f),
+                cursorColor = Kinoko.cream,
+            ),
+        )
+        Spacer(Modifier.width(8.dp))
+        if (running) {
+            FilledIconButton(onClick = onAbort, modifier = Modifier.size(52.dp), shape = CircleShape, colors = IconButtonDefaults.filledIconButtonColors(containerColor = Kinoko.red)) {
+                Icon(Icons.Outlined.Stop, "stop the run", tint = Kinoko.cream)
+            }
+            if (draft.isNotBlank()) {
+                Spacer(Modifier.width(6.dp))
+                Column {
+                    FilledIconButton(onClick = onSend, modifier = Modifier.size(52.dp), shape = CircleShape, colors = IconButtonDefaults.filledIconButtonColors(containerColor = Kinoko.cream)) {
+                        Icon(Icons.AutoMirrored.Outlined.Send, "steer", tint = Kinoko.night)
+                    }
+                    Text("later", style = MaterialTheme.typography.labelSmall, color = Kinoko.muted, modifier = Modifier.clickable(onClick = onLater).padding(top = 2.dp).align(Alignment.CenterHorizontally))
+                }
+            }
+        } else {
+            FilledIconButton(onClick = onSend, enabled = draft.isNotBlank(), modifier = Modifier.size(52.dp), shape = CircleShape, colors = IconButtonDefaults.filledIconButtonColors(containerColor = Kinoko.softRed)) {
+                Icon(Icons.AutoMirrored.Outlined.Send, "send", tint = Kinoko.night)
+            }
+        }
+    }
+}
