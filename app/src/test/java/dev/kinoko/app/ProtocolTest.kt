@@ -43,6 +43,27 @@ class ProtocolTest {
     }
 
     @Test
+    fun approvalsWaitingAndAnswered() {
+        fun agent(id: String, approval: String? = null, command: String = "sudo ls") =
+            dev.kinoko.app.data.AgentInfo.from(
+                org.json.JSONObject().put("id", id).put("state", "running").apply {
+                    if (approval != null) put("approval", org.json.JSONObject().put("id", approval).put("reason", "sudo needs your confirmation")
+                        .put("call", org.json.JSONObject().put("id", "c").put("name", "bash").put("args", org.json.JSONObject().put("command", command))))
+                },
+            )
+        val asked = agent("a", "q1")
+        assertEquals("$ sudo ls", asked.approval?.command)
+        assertEquals("sudo needs your confirmation", asked.approval?.reason)
+        assertNull(agent("b").approval)
+        val before = listOf(agent("a", "q1"), agent("b"), agent("c", "q3"))
+        val after = listOf(agent("a", "q1"), agent("b", "q2"), agent("c"))
+        assertEquals(listOf("b"), dev.kinoko.app.data.asking(before, after).map { it.id }) // a was already waiting
+        assertEquals(listOf("q3"), dev.kinoko.app.data.answered(before, after))
+        val read = dev.kinoko.app.data.Approval.from(org.json.JSONObject().put("id", "q").put("call", org.json.JSONObject().put("name", "write").put("args", org.json.JSONObject().put("path", "a"))))
+        assertEquals("write {\"path\":\"a\"}", read?.command)
+    }
+
+    @Test
     fun slashCommands() {
         val cmds = Incoming.parse("""{"type":"commands","agent":"a","commands":[{"name":"new","description":"d","kind":"run"},{"name":"extensions","description":"e","kind":"list"}]}""") as Incoming.Commands
         assertEquals(listOf(false, true), cmds.commands.map { it.lists })

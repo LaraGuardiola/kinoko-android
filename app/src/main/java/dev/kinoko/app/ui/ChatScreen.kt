@@ -102,6 +102,7 @@ fun ChatScreen(
     commandBusy: Boolean = false,
     onCommand: (String, String) -> Unit = { _, _ -> },
     onClosePanel: () -> Unit = {},
+    onApprove: (request: String, allow: Boolean, remember: Boolean) -> Unit = { _, _, _ -> },
 ) {
     BackHandler(enabled = panel != null) { onClosePanel() }
     // A command's panel needs the room the keyboard takes: it goes when a command is chosen.
@@ -178,6 +179,8 @@ fun ChatScreen(
                     }
                 }
             }
+            // A call waiting for the user's answer comes first: the run is stuck until someone answers.
+            agent?.approval?.let { ask -> ApprovalCard(ask) { allow, remember -> haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove); onApprove(ask.id, allow, remember) } }
             // The slash menu above the input: a command's panel, or the commands matching "/…".
             if (panel != null && panelCommand != null) {
                 CommandPanel(panel, panelCommand, commandBusy, onAct = { arg -> onCommand(panelCommand, arg) }, onClose = onClosePanel)

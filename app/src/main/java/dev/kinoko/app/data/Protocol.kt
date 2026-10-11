@@ -34,6 +34,8 @@ data class AgentInfo(
     val ended: String? = null,
     /** The start of its last reply, one line. */
     val last: String? = null,
+    /** A tool call waiting for the user's answer (Allow / Deny / For this session). */
+    val approval: Approval? = null,
 ) {
     val terminal: Boolean get() = origin == "terminal"
 
@@ -55,6 +57,7 @@ data class AgentInfo(
             error = o.optStringOrNull("error"),
             ended = o.optStringOrNull("ended"),
             last = o.optStringOrNull("last"),
+            approval = o.optJSONObject("approval")?.let(Approval::from),
         )
     }
 }
@@ -62,6 +65,22 @@ data class AgentInfo(
 data class ToolCall(val id: String, val name: String, val args: JSONObject) {
     companion object {
         fun from(o: JSONObject) = ToolCall(o.optString("id"), o.optString("name"), o.optJSONObject("args") ?: JSONObject())
+    }
+}
+
+/** A call an extension asked about: the agent waits until a client answers with `approve`. */
+data class Approval(val id: String, val call: ToolCall, val reason: String) {
+    /** What the user reads: a shell command as it is, any other tool by name and args. */
+    val command: String get() {
+        val shell = call.args.optStringOrNull("command") ?: call.args.optStringOrNull("cmd")
+        return if (call.name == "bash" && shell != null) "$ $shell" else "${call.name} ${call.args}"
+    }
+
+    companion object {
+        fun from(o: JSONObject): Approval? {
+            val id = o.optStringOrNull("id") ?: return null
+            return Approval(id, ToolCall.from(o.optJSONObject("call") ?: JSONObject()), o.optString("reason"))
+        }
     }
 }
 
@@ -167,6 +186,18 @@ sealed interface Incoming {
 fun ended(before: List<AgentInfo>, after: List<AgentInfo>): List<AgentInfo> {
     val was = before.associateBy { it.id }
     return after.filter { was[it.id]?.state == AgentState.RUNNING && it.state != AgentState.RUNNING }
+}
+
+/** The agents that started waiting for an answer between two lists (a new request, not one already seen). */
+fun asking(before: List<AgentInfo>, after: List<AgentInfo>): List<AgentInfo> {
+    val was = before.associate { it.id to it.approval?.id }
+    return after.filter { it.approval != null && was[it.id] != it.approval.id }
+}
+
+/** The requests answered (or gone) between two lists: their ids. */
+fun answered(before: List<AgentInfo>, after: List<AgentInfo>): List<String> {
+    val now = after.mapNotNull { it.approval?.id }.toSet()
+    return before.mapNotNull { it.approval?.id }.filter { it !in now }
 }
 
 /** A pairing link from the computer's QR code: kinoko://pair?u=<url>&c=<code>. */

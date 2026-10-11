@@ -43,6 +43,28 @@ class Notifier(private val context: Context) {
         NotificationManagerCompat.from(context).notify(agent.id.hashCode(), notification)
     }
 
+    /** A call waiting for the user: tapping it opens the chat, where the card answers it. */
+    fun approval(agent: AgentInfo) {
+        val ask = agent.approval ?: return
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        val text = "${ask.command}\n${ask.reason}"
+        val notification = NotificationCompat.Builder(context, AGENTS)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("${agent.project} · wants to run")
+            .setContentText(ask.command)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setColor(0xFFE82424.toInt())
+            .setAutoCancel(true)
+            .setContentIntent(open(agent.id))
+            .build()
+        NotificationManagerCompat.from(context).notify(approvalTag(ask.id), notification)
+    }
+
+    /** Answered (here, in the terminal, anywhere) or gone: its notification goes too. */
+    fun answered(request: String) = NotificationManagerCompat.from(context).cancel(approvalTag(request))
+
+    private fun approvalTag(request: String) = "approval:$request".hashCode()
+
     /** Opens the app on that agent's chat. */
     private fun open(agent: String?): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
