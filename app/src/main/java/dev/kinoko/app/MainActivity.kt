@@ -108,6 +108,12 @@ fun App(vm: HubViewModel) {
                         onFollowUp = vm::followUp,
                         onAbort = vm::abort,
                         onStop = { id?.let(vm::stop) },
+                        commands = id?.let { state.commands[it] }.orEmpty(),
+                        panel = state.panel,
+                        panelCommand = state.panelCommand,
+                        commandBusy = state.commandBusy,
+                        onCommand = vm::command,
+                        onClosePanel = vm::closePanel,
                     )
                 }
             }

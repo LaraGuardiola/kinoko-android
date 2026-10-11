@@ -96,6 +96,27 @@ data class Project(val cwd: String, val name: String, val updated: Long, val ses
     }
 }
 
+/** A slash command the agent takes: "list" answers with items to act on, "run" does it at once. */
+data class CommandInfo(val name: String, val description: String, val kind: String) {
+    val lists: Boolean get() = kind == "list"
+}
+
+data class CommandItem(val name: String, val description: String, val current: Boolean, val off: Boolean, val installed: Boolean, val shared: Boolean)
+
+data class CommandResult(val title: String?, val text: String?, val items: List<CommandItem>?, val hint: String?, val reset: Boolean) {
+    companion object {
+        fun from(o: JSONObject) = CommandResult(
+            title = o.optStringOrNull("title"),
+            text = o.optStringOrNull("text"),
+            items = o.optJSONArray("items")?.objects()?.map {
+                CommandItem(it.optString("name"), it.optString("description"), it.optBoolean("current"), it.optBoolean("off"), it.optBoolean("installed"), it.optBoolean("shared"))
+            },
+            hint = o.optStringOrNull("hint"),
+            reset = o.optBoolean("reset"),
+        )
+    }
+}
+
 /** What the computer sends over the WebSocket. */
 sealed interface Incoming {
     data class Hello(val version: String, val device: String, val agents: List<AgentInfo>) : Incoming
@@ -104,6 +125,8 @@ sealed interface Incoming {
     data class History(val agent: String, val info: AgentInfo?, val messages: List<Message>, val live: List<JSONObject>) : Incoming
     data class Event(val agent: String, val event: JSONObject) : Incoming
     data class Ok(val id: String?, val agent: AgentInfo?, val text: String?) : Incoming
+    data class Commands(val agent: String, val commands: List<CommandInfo>) : Incoming
+    data class Ran(val id: String?, val agent: String, val result: CommandResult) : Incoming
     data class Error(val id: String?, val detail: String) : Incoming
 
     companion object {
@@ -121,6 +144,8 @@ sealed interface Incoming {
                     o.optJSONArray("live").objects(),
                 )
                 "event" -> o.optJSONObject("event")?.let { Event(o.optString("agent"), it) }
+                "commands" -> Commands(o.optString("agent"), o.optJSONArray("commands").objects().map { CommandInfo(it.optString("name"), it.optString("description"), it.optString("kind")) })
+                "command_result" -> Ran(o.optStringOrNull("id"), o.optString("agent"), CommandResult.from(o.optJSONObject("result") ?: JSONObject()))
                 "ok" -> Ok(o.optStringOrNull("id"), o.optJSONObject("agent")?.let(AgentInfo::from), o.optStringOrNull("text"))
                 "error" -> Error(o.optStringOrNull("id"), o.optString("detail", "refused"))
                 else -> null

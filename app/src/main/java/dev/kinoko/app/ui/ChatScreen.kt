@@ -65,6 +65,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -72,7 +73,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.kinoko.app.data.AgentInfo
+import androidx.activity.compose.BackHandler
 import dev.kinoko.app.data.AssistantItem
+import dev.kinoko.app.data.CommandInfo
+import dev.kinoko.app.data.CommandResult
 import dev.kinoko.app.data.Connection
 import dev.kinoko.app.data.Item
 import dev.kinoko.app.data.NoticeItem
@@ -92,7 +96,16 @@ fun ChatScreen(
     onFollowUp: (String) -> Unit,
     onAbort: () -> Unit,
     onStop: () -> Unit,
+    commands: List<CommandInfo> = emptyList(),
+    panel: CommandResult? = null,
+    panelCommand: String? = null,
+    commandBusy: Boolean = false,
+    onCommand: (String, String) -> Unit = { _, _ -> },
+    onClosePanel: () -> Unit = {},
 ) {
+    BackHandler(enabled = panel != null) { onClosePanel() }
+    // A command's panel needs the room the keyboard takes: it goes when a command is chosen.
+    val keyboard = LocalSoftwareKeyboardController.current
     val t = transcript ?: Transcript()
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -170,13 +183,28 @@ fun ChatScreen(
                     }
                 }
             }
+            // The slash menu above the input: a command's panel, or the commands matching "/…".
+            if (panel != null && panelCommand != null) {
+                CommandPanel(panel, panelCommand, commandBusy, onAct = { arg -> onCommand(panelCommand, arg) }, onClose = onClosePanel)
+            } else if (draft.startsWith("/") && !draft.contains(' ')) {
+                CommandSuggestions(commands, draft) { c ->
+                    keyboard?.hide()
+                    draft = ""
+                    onCommand(c.name, "")
+                }
+            }
             Composer(
                 draft = draft,
                 onDraft = { draft = it },
                 running = t.running,
                 onSend = {
                     val text = draft.trim()
-                    if (text.isNotEmpty() && onSay(text)) {
+                    if (text.startsWith("/")) {
+                        // "/thinking high", "/extensions off web": a command, never a prompt.
+                        onCommand(text.drop(1).substringBefore(' '), text.substringAfter(' ', ""))
+                        keyboard?.hide()
+                        draft = ""
+                    } else if (text.isNotEmpty() && onSay(text)) {
                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         draft = ""
                         scope.launch { list.animateScrollToItem(0) }
