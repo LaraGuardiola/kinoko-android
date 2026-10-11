@@ -36,6 +36,8 @@ data class AgentInfo(
     val last: String? = null,
     /** A tool call waiting for the user's answer (Allow / Deny / For this session). */
     val approval: Approval? = null,
+    /** Background shells running in it; null when none. */
+    val jobs: Int? = null,
 ) {
     val terminal: Boolean get() = origin == "terminal"
 
@@ -58,6 +60,7 @@ data class AgentInfo(
             ended = o.optStringOrNull("ended"),
             last = o.optStringOrNull("last"),
             approval = o.optJSONObject("approval")?.let(Approval::from),
+            jobs = o.optInt("jobs", 0).takeIf { it > 0 },
         )
     }
 }
