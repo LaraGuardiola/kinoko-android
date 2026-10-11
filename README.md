@@ -10,6 +10,11 @@ buttons are real ones.
 - **Chat**: the reply streams in as markdown; thinking folds away; tool calls show what they ran,
   with a ✓ or ✗ and their output a tap away. Ask, steer it mid-run ("later" queues instead), or stop
   the run (Esc).
+- **Notifications**: an agent that finishes, stops or fails while the app is not on screen says so,
+  with how its reply began; tap to open its chat. A quiet "Listening" notification stays while the
+  app keeps the connection open in the background (Disconnect ends it until you open the app).
+- **Slash commands**: type `/` for the agent's commands (new, compact, thinking, models,
+  extensions, skills, session, clear, fork, help); lists open in a panel above the input.
 - **Pairing**: scan the QR code `kinoko serve` shows. The token stays in the Android Keystore.
 - **Anywhere**: through Tailscale. With the Tailscale app on the phone, `kinoko serve` is reachable
   from anywhere and only by your devices; `kinoko serve --funnel` opens it to the internet for a

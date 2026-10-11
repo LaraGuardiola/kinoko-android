@@ -2,8 +2,6 @@ package dev.kinoko.app
 
 import android.app.Application
 import android.os.Build
-import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
 import dev.kinoko.app.data.AgentInfo
 import dev.kinoko.app.data.AgentState
 import dev.kinoko.app.data.CommandInfo
@@ -16,7 +14,11 @@ import dev.kinoko.app.data.Incoming
 import dev.kinoko.app.data.PairingLink
 import dev.kinoko.app.data.Project
 import dev.kinoko.app.data.Transcript
+import dev.kinoko.app.data.ended
 import dev.kinoko.app.data.pair
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -44,9 +46,16 @@ data class UiState(
     val commandBusy: Boolean = false,
 )
 
-class HubViewModel(app: Application) : AndroidViewModel(app) {
+/**
+ * The app's connection to the computer and everything it knows, for as long as the process lives:
+ * the screens draw it, and in the background (HubService keeps the process alive) it goes on
+ * listening, so an agent that finishes while the phone is in a pocket can say so.
+ */
+class HubCore(private val app: Application, private val foreground: () -> Boolean) {
+    private val viewModelScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val store = HubStore(app)
     private val client = HubClient(viewModelScope)
+    private val notifier = Notifier(app)
     val connection: StateFlow<Connection> = client.connection
     private val _state = MutableStateFlow(UiState(hub = store.load()))
     val state: StateFlow<UiState> = _state
@@ -68,7 +77,11 @@ class HubViewModel(app: Application) : AndroidViewModel(app) {
     private fun receive(msg: Incoming) {
         when (msg) {
             is Incoming.Hello -> _state.update { it.copy(agents = msg.agents) }
-            is Incoming.Agents -> _state.update { it.copy(agents = msg.agents) }
+            is Incoming.Agents -> {
+                // A run that ended while nobody was looking at the app: said in a notification.
+                if (!foreground()) ended(_state.value.agents, msg.agents).forEach(notifier::finished)
+                _state.update { it.copy(agents = msg.agents) }
+            }
             is Incoming.Projects -> _state.update { it.copy(projects = msg.projects, projectsLoading = false) }
             is Incoming.History -> _state.update {
                 val running = msg.info?.state == AgentState.RUNNING
@@ -120,13 +133,26 @@ class HubViewModel(app: Application) : AndroidViewModel(app) {
                     store.save(hub)
                     _state.update { it.copy(hub = hub, pairing = false) }
                     client.connect(hub)
+                    HubService.start(app)
                 },
                 onFailure = { e -> _state.update { it.copy(pairing = false, pairingError = e.message ?: "could not reach ${link.url}") } },
             )
         }
     }
 
+    /** The background service's Disconnect: no more listening until the app is opened again. */
+    fun pause() = client.disconnect()
+
+    /** Back from a pause (the app opened again). */
+    fun resume() {
+        val hub = _state.value.hub ?: return
+        if (connection.value is Connection.Offline) client.connect(hub)
+    }
+
+    val paired: Boolean get() = _state.value.hub != null
+
     fun forget() {
+        HubService.stop(app)
         client.disconnect()
         store.clear()
         _state.value = UiState()

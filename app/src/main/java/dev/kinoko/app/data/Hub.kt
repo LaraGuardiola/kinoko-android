@@ -26,6 +26,9 @@ import java.util.concurrent.TimeUnit
 /** A paired computer: where it is, and this device's token for it. */
 data class Hub(val url: String, val token: String, val device: String) {
     val host: String get() = url.substringAfter("://").substringBefore('/')
+
+    /** The machine's name (omarchy from omarchy.tail1.ts.net), or the whole address when it is an IP. */
+    val shortHost: String get() = host.substringBefore(':').let { h -> if (h.any(Char::isLetter) && h.contains('.')) h.substringBefore('.') else h }
     val ws: String get() = url.replaceFirst("https://", "wss://").replaceFirst("http://", "ws://") + "/v1/ws"
 }
 

@@ -8,7 +8,11 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.viewModels
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -31,7 +35,8 @@ import dev.kinoko.app.ui.KinokoTheme
 import dev.kinoko.app.ui.PairScreen
 
 class MainActivity : ComponentActivity() {
-    private val vm: HubViewModel by viewModels()
+    private val vm: HubCore by lazy { (application as KinokoApp).core }
+    private val notifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,11 +53,20 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        vm.resume() // back from a Disconnect in the notification
         vm.nudge() // back in front: reconnect now rather than at the next retry
+        if (vm.paired) {
+            // Listening in the background, and allowed to say when an agent finishes.
+            HubService.start(this)
+            if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
     }
 
-    /** A kinoko://pair link opened from the camera app or a browser. */
+    /** A kinoko://pair link opened from the camera app or a browser; a notification's agent. */
     private fun handle(intent: Intent?) {
+        intent?.getStringExtra(Notifier.EXTRA_AGENT)?.let { vm.open(it) }
         val link = intent?.data?.toString() ?: return
         if (link.startsWith("kinoko://pair")) vm.pairWith(link)
     }
@@ -61,7 +75,7 @@ class MainActivity : ComponentActivity() {
 private enum class Screen { PAIR, AGENTS, CHAT }
 
 @androidx.compose.runtime.Composable
-fun App(vm: HubViewModel) {
+fun App(vm: HubCore) {
     val state by vm.state.collectAsStateWithLifecycle()
     val connection by vm.connection.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -86,7 +100,7 @@ fun App(vm: HubViewModel) {
             when (target) {
                 Screen.PAIR -> PairScreen(state.pairing, state.pairingError ?: if (connection == Connection.Unpaired) "This phone is no longer paired with the computer: pair it again." else null, vm::pairWith)
                 Screen.AGENTS -> AgentsScreen(
-                    host = hub?.host ?: "",
+                    host = hub?.shortHost ?: "",
                     connection = connection,
                     agents = state.agents,
                     projects = state.projects,

@@ -30,6 +30,10 @@ data class AgentInfo(
     val started: Long,
     val activity: Long,
     val error: String?,
+    /** How its last run ended: done, aborted, error, limit; null while one runs. */
+    val ended: String? = null,
+    /** The start of its last reply, one line. */
+    val last: String? = null,
 ) {
     val terminal: Boolean get() = origin == "terminal"
 
@@ -49,6 +53,8 @@ data class AgentInfo(
             started = o.optLong("started"),
             activity = o.optLong("activity"),
             error = o.optStringOrNull("error"),
+            ended = o.optStringOrNull("ended"),
+            last = o.optStringOrNull("last"),
         )
     }
 }
@@ -153,6 +159,12 @@ sealed interface Incoming {
             }
         }
     }
+}
+
+/** The agents whose run ended between two lists: working before, not any more (or gone). */
+fun ended(before: List<AgentInfo>, after: List<AgentInfo>): List<AgentInfo> {
+    val was = before.associateBy { it.id }
+    return after.filter { was[it.id]?.state == AgentState.RUNNING && it.state != AgentState.RUNNING }
 }
 
 /** A pairing link from the computer's QR code: kinoko://pair?u=<url>&c=<code>. */

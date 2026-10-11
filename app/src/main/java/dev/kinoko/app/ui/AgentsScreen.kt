@@ -126,7 +126,7 @@ fun AgentsScreen(
                             ConnectionDot(connection)
                             Text(
                                 "  " + when (connection) {
-                                    is Connection.Online -> host.substringBefore(':').let { h -> if (h.any(Char::isLetter) && h.contains('.')) h.substringBefore('.') else h }
+                                    is Connection.Online -> host
                                     is Connection.Connecting -> "connecting…"
                                     Connection.Unpaired -> "this phone is no longer paired"
                                     Connection.Offline -> "offline"
