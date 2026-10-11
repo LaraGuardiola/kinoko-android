@@ -30,6 +30,13 @@ class ProtocolTest {
     }
 
     @Test
+    fun unreachableSaysWhatToDo() {
+        val e = java.io.IOException("connection closed")
+        assertTrue(dev.kinoko.app.data.unreachable("https://omarchy.tail1.ts.net:8443", e).contains("Is Tailscale on"))
+        assertEquals("Can't reach 192.168.1.5: connection closed", dev.kinoko.app.data.unreachable("http://192.168.1.5:7878", e))
+    }
+
+    @Test
     fun incomingMessages() {
         val hello = Incoming.parse("""{"type":"hello","version":"0.1.0","protocol":1,"device":{"id":"d","name":"OnePlus"},"agents":[{"id":"a1","cwd":"/p/kinoko","project":"kinoko","model":"/m/Qwen3.6.gguf","state":"running","started":1,"activity":2,"title":"fix it"}]}""")
         assertTrue(hello is Incoming.Hello)

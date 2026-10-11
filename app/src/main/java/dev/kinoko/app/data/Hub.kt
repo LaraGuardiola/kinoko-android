@@ -64,14 +64,31 @@ val http: OkHttpClient = OkHttpClient.Builder()
     .pingInterval(25, TimeUnit.SECONDS) // a dead connection (a tunnel, a lift) is noticed soon
     .build()
 
+/** Why the computer could not be reached, in words that say what to do. */
+fun unreachable(url: String, e: Throwable): String {
+    val host = url.substringAfter("://").substringBefore('/').substringBefore(':')
+    return if (host.endsWith(".ts.net")) "Can't reach $host. Is Tailscale on in this device? The computer is shared with your tailnet only (or run `kinoko serve --funnel`)."
+    else "Can't reach $host: ${e.message ?: e.javaClass.simpleName}"
+}
+
 /** Trades a pairing code for a token. */
 suspend fun pair(link: PairingLink, device: String): Result<Hub> = withContext(Dispatchers.IO) {
     runCatching {
+        try {
+            exchange(link, device)
+        } catch (e: java.io.IOException) {
+            error(unreachable(link.url, e))
+        }
+    }
+}
+
+private fun exchange(link: PairingLink, device: String): Hub {
+    run {
         val body = JSONObject().put("code", link.code).put("name", device).toString().toRequestBody("application/json".toMediaType())
         http.newCall(Request.Builder().url("${link.url}/v1/pair").post(body).build()).execute().use { res ->
             val json = JSONObject(res.body?.string().orEmpty().ifBlank { "{}" })
             if (!res.isSuccessful) error(json.optString("error").ifBlank { "the computer said ${res.code}" })
-            Hub(link.url, json.getString("token"), json.optJSONObject("device")?.optString("name") ?: device)
+            return Hub(link.url, json.getString("token"), json.optJSONObject("device")?.optString("name") ?: device)
         }
     }
 }
