@@ -145,6 +145,18 @@ fun inline(text: String, codeColor: androidx.compose.ui.graphics.Color = Kinoko.
     }
 }
 
+/** A reply still being written: a bold or a code span it has opened and not closed yet is closed
+ *  for now, so it is drawn as such from its first character instead of showing its markers. */
+fun closeOpen(text: String): String {
+    if (text.split("\n").count { Regex("^\\s*(`{3,}|~{3,})").containsMatchIn(it) } % 2 == 1) return text // inside a fence
+    val last = text.substringAfterLast("\n\n")
+    var out = text
+    if (Regex("`").findAll(last).count() % 2 == 1) out += "`"
+    val stars = Regex("\\*\\*").findAll(last.replace(Regex("`[^`]*`"), "")).count()
+    if (stars % 2 == 1 && !out.endsWith("**")) out += "**"
+    return out
+}
+
 @Composable
 fun Markdown(text: String, modifier: Modifier = Modifier) {
     val parsed = remember(text) { blocks(text) }
