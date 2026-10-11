@@ -31,6 +31,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -170,7 +171,8 @@ fun AgentsScreen(
                     Box {
                         AgentCard(agent, Modifier.animateItem().combinedClickable(onClick = { onOpen(agent.id) }, onLongClick = { actions = true }))
                         DropdownMenu(actions, { actions = false }) {
-                            DropdownMenuItem(text = { Text("Stop this agent") }, onClick = { actions = false; onStop(agent.id) })
+                            if (agent.terminal) DropdownMenuItem(text = { Text("Runs in a terminal: stop it there") }, onClick = { actions = false }, enabled = false)
+                            else DropdownMenuItem(text = { Text("Stop this agent") }, onClick = { actions = false; onStop(agent.id) })
                         }
                     }
                 }
@@ -197,7 +199,13 @@ private fun AgentCard(agent: AgentInfo, modifier: Modifier) {
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(agent.project, fontWeight = FontWeight.SemiBold, color = Kinoko.cream, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    Text(agent.project, fontWeight = FontWeight.SemiBold, color = Kinoko.cream, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    if (agent.terminal) {
+                        Spacer(Modifier.width(8.dp))
+                        Icon(Icons.Outlined.Terminal, "in a terminal", tint = Kinoko.blue, modifier = Modifier.size(16.dp))
+                    }
+                }
                 Text(ago(agent.activity), style = MaterialTheme.typography.labelSmall, color = Kinoko.muted)
             }
             Text(
@@ -208,7 +216,7 @@ private fun AgentCard(agent: AgentInfo, modifier: Modifier) {
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(
-                listOf(agent.modelName, when (agent.state) { AgentState.RUNNING -> "working"; AgentState.IDLE -> "waiting for you"; AgentState.STARTING -> "starting"; AgentState.EXITED -> "exited" })
+                listOf(if (agent.terminal) "terminal" else "", agent.modelName, when (agent.state) { AgentState.RUNNING -> "working"; AgentState.IDLE -> "waiting for you"; AgentState.STARTING -> "starting"; AgentState.EXITED -> "exited" })
                     .filter { it.isNotBlank() }.joinToString(" · "),
                 style = MaterialTheme.typography.labelSmall,
                 color = Kinoko.muted,
