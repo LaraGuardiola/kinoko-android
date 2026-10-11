@@ -19,6 +19,8 @@ enum class AgentState { STARTING, IDLE, RUNNING, EXITED;
 
 data class AgentInfo(
     val id: String,
+    /** "app": started from here (or another device); "terminal": a kinoko TUI linked to the hub. */
+    val origin: String,
     val cwd: String,
     val project: String,
     val model: String,
@@ -29,12 +31,15 @@ data class AgentInfo(
     val activity: Long,
     val error: String?,
 ) {
+    val terminal: Boolean get() = origin == "terminal"
+
     /** The model's name without its path and file extension. */
     val modelName: String get() = model.substringAfterLast('/').removeSuffix(".gguf")
 
     companion object {
         fun from(o: JSONObject) = AgentInfo(
             id = o.optString("id"),
+            origin = o.optString("origin", "app"),
             cwd = o.optString("cwd"),
             project = o.optString("project"),
             model = o.optString("model"),

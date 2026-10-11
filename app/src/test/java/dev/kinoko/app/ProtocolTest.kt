@@ -45,6 +45,9 @@ class ProtocolTest {
         assertEquals("Qwen3.6", agent.modelName)
         assertEquals("fix it", agent.title)
         assertNull(agent.session)
+        assertEquals(false, agent.terminal) // no origin: one the hub started
+        val linked = (Incoming.parse("""{"type":"agents","agents":[{"id":"t","origin":"terminal","cwd":"/p","project":"p","model":"m","state":"idle"}]}""") as Incoming.Agents).agents.single()
+        assertTrue(linked.terminal)
 
         val history = Incoming.parse("""{"type":"history","agent":"a1","messages":[{"id":"1","role":"user","content":"x"}],"live":[{"type":"message_delta","delta":"y"}]}""") as Incoming.History
         assertEquals(1, history.messages.size)

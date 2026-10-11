@@ -141,7 +141,8 @@ fun ChatScreen(
                     Box {
                         IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "menu") }
                         DropdownMenu(menu, { menu = false }) {
-                            DropdownMenuItem(text = { Text("Stop this agent") }, onClick = { menu = false; onStop() })
+                            if (agent?.terminal == true) DropdownMenuItem(text = { Text("Runs in a terminal: stop it there") }, onClick = { menu = false }, enabled = false)
+                            else DropdownMenuItem(text = { Text("Stop this agent") }, onClick = { menu = false; onStop() })
                         }
                     }
                 },
