@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -44,7 +46,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import androidx.compose.ui.unit.sp
 
 // Markdown for the chat, drawn natively: it reflows to any width, code scrolls sideways instead
@@ -221,10 +226,11 @@ fun Markdown(text: String, modifier: Modifier = Modifier, streaming: Boolean = f
 /**
  * A block the computer draws exactly as the TUI does (code with its colours, a diff's tinted rows,
  * a tree, a mermaid diagram, a table's grid), fitted to this screen's columns; until its answer
- * comes (or when it cannot: an older hub), `fallback` draws it here.
+ * comes (or when it cannot: an older hub), `fallback` draws it here. The TUI's copy mark (⧉, by the
+ * language) becomes a button that copies `copy`.
  */
 @Composable
-fun DrawnBlock(source: String, fallback: @Composable () -> Unit) {
+fun DrawnBlock(source: String, copy: String, fallback: @Composable () -> Unit) {
     val blocks = LocalBlocks.current
     if (blocks == null) return fallback()
     BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -237,8 +243,11 @@ fun DrawnBlock(source: String, fallback: @Composable () -> Unit) {
         val style = remember(density, cell) { TextStyle(fontFamily = Mono, fontSize = with(density) { (cell / 0.6f).toSp() }) }
         val cols = (constraints.maxWidth / cell).toInt().coerceIn(20, 200)
         LaunchedEffect(source, cols) { blocks.request(source, cols) }
-        val lines = blocks.lines(source, cols)
-        if (lines.isNullOrEmpty()) return@BoxWithConstraints fallback()
+        val drawn = blocks.lines(source, cols)
+        if (drawn.isNullOrEmpty()) return@BoxWithConstraints fallback()
+        // Where the mark is (row, column), and the rows without it: a button is put there instead.
+        val mark = remember(drawn) { drawn.take(3).withIndex().firstNotNullOfOrNull { (r, line) -> plain(listOf(line)).indexOf(COPY).takeIf { it >= 0 }?.let { r to it } } }
+        val lines = remember(drawn) { drawn.map { it.replace(COPY, ' ') } }
         val back = remember(lines) { ground(lines) }
         // Rows touch: the font's box-drawing verticals run from -0.246 to 0.979 em, so a line is
         // under 1.225 em: drawn, a 39 px row held a 38 px stroke and left a seam; at 1.18 they overlap.
@@ -255,6 +264,13 @@ fun DrawnBlock(source: String, fallback: @Composable () -> Unit) {
             onTextLayout = { laid = it },
             modifier = Modifier.horizontalScroll(rememberScrollState()).cells(rows, cell, rowStyle, measurer, laid),
         )
+        val text = laid
+        if (mark != null && text != null && mark.first < text.lineCount) {
+            val x = mark.second * cell + cell / 2
+            val y = (text.getLineTop(mark.first) + text.getLineBottom(mark.first)) / 2
+            val half = with(density) { 20.dp.toPx() }
+            CopyMark(copy, Modifier.offset { IntOffset((x - half).roundToInt(), (y - half).roundToInt()) })
+        }
         }
     }
 }
@@ -278,9 +294,9 @@ private fun MarkdownBlock(block: Block, last: Boolean = false) {
             Box(Modifier.width(3.dp).fillMaxHeight().background(Kinoko.muted, RoundedCornerShape(2.dp)))
             Text(inline(block.text), style = body.copy(fontStyle = FontStyle.Italic), color = Kinoko.muted, modifier = Modifier.padding(start = 10.dp))
         }
-        is Block.Code -> if (block.closed && block.raw.isNotEmpty()) DrawnBlock(block.raw) { CodeBlock(block.lang, block.text) } else CodeBlock(block.lang, block.text)
-        is Block.Tree -> if (!last) DrawnBlock(block.raw) { CodeBlock("", block.raw) } else CodeBlock("", block.raw)
-        is Block.Table -> if (!last) DrawnBlock(block.raw) { CodeBlock("table", block.raw) } else CodeBlock("table", block.raw)
+        is Block.Code -> if (block.closed && block.raw.isNotEmpty()) DrawnBlock(block.raw, block.text) { CodeBlock(block.lang, block.text) } else CodeBlock(block.lang, block.text)
+        is Block.Tree -> if (!last) DrawnBlock(block.raw, block.raw) { CodeBlock("", block.raw) } else CodeBlock("", block.raw)
+        is Block.Table -> if (!last) DrawnBlock(block.raw, block.raw) { CodeBlock("table", block.raw) } else CodeBlock("table", block.raw)
         Block.Rule -> HorizontalDivider(color = Kinoko.line)
     }
 }
@@ -290,7 +306,10 @@ fun CodeBlock(lang: String, text: String) {
     Column(
         Modifier.fillMaxWidth().background(Kinoko.panel, RoundedCornerShape(10.dp)).padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
-        if (lang.isNotBlank() && lang != "table") Text(lang, style = MaterialTheme.typography.labelSmall, color = Kinoko.muted, modifier = Modifier.padding(bottom = 6.dp))
+        Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(if (lang == "table") "" else lang, style = MaterialTheme.typography.labelSmall, color = Kinoko.muted, modifier = Modifier.weight(1f))
+            CopyMark(text, Modifier.size(24.dp), icon = 14.dp)
+        }
         Text(
             text,
             fontFamily = Mono,
