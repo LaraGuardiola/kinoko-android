@@ -243,21 +243,28 @@ class HubCore(private val app: Application, private val foreground: () -> Boolea
     }
 
     /** A message to the open agent: a new run when it is idle, a steer while it works. */
-    fun say(text: String): Boolean {
+    fun say(text: String, files: List<Attachment> = emptyList()): Boolean {
         val agent = _state.value.open ?: return false
         val running = _state.value.transcripts[agent]?.running == true
         return send(if (running) "steer" else "prompt") {
             put("agent", agent)
             put("text", text)
+            if (files.isNotEmpty()) put("files", filesJson(files))
         }
     }
 
-    fun followUp(text: String) {
+    fun followUp(text: String, files: List<Attachment> = emptyList()) {
         val agent = _state.value.open ?: return
         send("follow_up") {
             put("agent", agent)
             put("text", text)
+            if (files.isNotEmpty()) put("files", filesJson(files))
         }
+    }
+
+    /** Files as the computer takes them: saved there, named in the message (photos also shown to the model). */
+    private fun filesJson(files: List<Attachment>) = org.json.JSONArray().apply {
+        for (f in files) put(JSONObject().put("name", f.name).put("mime", f.mime).put("data", android.util.Base64.encodeToString(f.bytes, android.util.Base64.NO_WRAP)))
     }
 
     fun abort() {
