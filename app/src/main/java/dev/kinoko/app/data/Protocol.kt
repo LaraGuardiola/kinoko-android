@@ -134,6 +134,7 @@ sealed interface Incoming {
     data class Ok(val id: String?, val agent: AgentInfo?, val text: String?) : Incoming
     data class Commands(val agent: String, val commands: List<CommandInfo>) : Incoming
     data class Ran(val id: String?, val agent: String, val result: CommandResult) : Incoming
+    data class Rendered(val id: String?, val lines: List<String>) : Incoming
     data class Error(val id: String?, val detail: String) : Incoming
 
     companion object {
@@ -152,6 +153,7 @@ sealed interface Incoming {
                 )
                 "event" -> o.optJSONObject("event")?.let { Event(o.optString("agent"), it) }
                 "commands" -> Commands(o.optString("agent"), o.optJSONArray("commands").objects().map { CommandInfo(it.optString("name"), it.optString("description"), it.optString("kind")) })
+                "rendered" -> Rendered(o.optStringOrNull("id"), o.optJSONArray("lines")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList())
                 "command_result" -> Ran(o.optStringOrNull("id"), o.optString("agent"), CommandResult.from(o.optJSONObject("result") ?: JSONObject()))
                 "ok" -> Ok(o.optStringOrNull("id"), o.optJSONObject("agent")?.let(AgentInfo::from), o.optStringOrNull("text"))
                 "error" -> Error(o.optStringOrNull("id"), o.optString("detail", "refused"))

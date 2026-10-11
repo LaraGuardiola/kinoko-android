@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -81,7 +83,21 @@ fun CommandPanel(result: CommandResult, command: String, busy: Boolean, onAct: (
             if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Kinoko.cream)
             IconButton(onClick = onClose) { Icon(Icons.Outlined.Close, "close", tint = Kinoko.muted) }
         }
-        result.text?.let { Text(it, color = Kinoko.cream, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)) }
+        val reading = result.items == null
+        // Something to read (help, session): the text itself, scrolling; above a list: what was done.
+        result.text?.let {
+            val rows = it.lines()
+            if (reading && rows.all { r -> r.startsWith("/") }) {
+                // The commands (help): a name and what it does, as in the suggestions.
+                Column(Modifier.heightIn(max = PANEL_MAX).verticalScroll(rememberScrollState()).padding(vertical = 4.dp)) {
+                    for (r in rows) Row(Modifier.padding(horizontal = 16.dp, vertical = 7.dp)) {
+                        Text(r.substringBefore("  "), fontFamily = Mono, color = Kinoko.cream, fontSize = 14.sp, modifier = Modifier.width(118.dp))
+                        Text(r.substringAfter("  ", ""), color = Kinoko.muted, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            } else if (reading) Text(it, fontFamily = Mono, fontSize = 13.sp, lineHeight = 20.sp, color = Kinoko.text, modifier = Modifier.heightIn(max = PANEL_MAX).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 6.dp))
+            else Text(it, color = Kinoko.cream, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
+        }
         LazyColumn(Modifier.heightIn(max = PANEL_MAX)) {
             items(result.items.orEmpty(), key = { it.name }) { item ->
                 var menu by remember { mutableStateOf(false) }

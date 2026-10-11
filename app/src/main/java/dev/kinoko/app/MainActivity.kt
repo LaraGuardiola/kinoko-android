@@ -28,7 +28,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.kinoko.app.data.Connection
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import dev.kinoko.app.ui.AgentsScreen
+import dev.kinoko.app.ui.Blocks
+import dev.kinoko.app.ui.LocalBlocks
 import dev.kinoko.app.ui.ChatScreen
 import dev.kinoko.app.ui.Kinoko
 import dev.kinoko.app.ui.KinokoTheme
@@ -88,6 +92,8 @@ fun App(vm: HubCore) {
         else -> Screen.AGENTS
     }
     BackHandler(screen == Screen.CHAT) { vm.close() }
+    val blocks = remember(state.rendered) { Blocks(state.rendered, vm::render) }
+    CompositionLocalProvider(LocalBlocks provides blocks) {
     Box(Modifier.fillMaxSize().background(Kinoko.night)) {
         AnimatedContent(
             screen,
@@ -132,5 +138,6 @@ fun App(vm: HubCore) {
                 }
             }
         }
+    }
     }
 }

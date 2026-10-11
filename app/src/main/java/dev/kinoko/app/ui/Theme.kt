@@ -6,7 +6,10 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import dev.kinoko.app.R
 import androidx.compose.ui.unit.sp
 
 // kinoko's own colours, as in the terminal: amanita red, cream, a deep blue-grey night.
@@ -26,7 +29,9 @@ object Kinoko {
     val code = Color(0xFF89DCEB)
 }
 
-val Mono = FontFamily.Monospace
+/** Noto Sans Mono, subset (Latin, punctuation, arrows, box drawing, blocks, shapes): Android's own
+ *  monospace font has no box drawing, so diagrams and tables fell apart. OFL-licensed. */
+val Mono = FontFamily(Font(R.font.kinoko_mono_regular), Font(R.font.kinoko_mono_bold, FontWeight.Bold))
 
 private val scheme = darkColorScheme(
     primary = Kinoko.softRed,

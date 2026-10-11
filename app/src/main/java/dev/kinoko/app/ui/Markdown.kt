@@ -1,6 +1,13 @@
 package dev.kinoko.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.unit.em
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
@@ -43,8 +51,21 @@ sealed interface Block {
     data class Paragraph(val text: String) : Block
     data class ListItem(val marker: String, val text: String, val depth: Int) : Block
     data class Quote(val text: String) : Block
-    data class Code(val lang: String, val text: String) : Block
+    /** A fenced block: `raw` is it as written (fences included), what the computer is asked to draw;
+     *  `closed` once its closing fence came (a block still streaming is drawn here, plainly). */
+    data class Code(val lang: String, val text: String, val raw: String = "", val closed: Boolean = true) : Block
+    data class Table(val raw: String) : Block
+    /** A directory tree outside a fence (├── lines): drawn by the computer, its guides kept. */
+    data class Tree(val raw: String) : Block
     data object Rule : Block
+}
+
+private val CONNECTOR = Regex("├──?|└──?|\\|--|`--|\\+--|\\\\--")
+
+/** A line of a tree: guides (│ or |, spaces) then a connector, as kinoko's tree.ts reads them. */
+fun isTreeLine(line: String): Boolean {
+    val at = CONNECTOR.find(line) ?: return false
+    return line.substring(0, at.range.first).all { it == ' ' || it == '\t' || it == '│' || it == '|' }
 }
 
 fun blocks(text: String): List<Block> {
@@ -63,23 +84,34 @@ fun blocks(text: String): List<Block> {
             fence != null -> {
                 flush()
                 val marker = fence.groupValues[1]
+                val start = i
                 val body = mutableListOf<String>()
                 i++
                 while (i < lines.size && !lines[i].trim().startsWith(marker)) body += lines[i++]
-                out += Block.Code(fence.groupValues[2], body.joinToString("\n"))
+                val closed = i < lines.size
+                out += Block.Code(fence.groupValues[2], body.joinToString("\n"), lines.subList(start, minOf(i + 1, lines.size)).joinToString("\n"), closed)
             }
-            // A table: kept as code, its columns lined up by the monospace font.
+            // A table: drawn by the computer as the TUI draws it (a box grid), or here as text.
             line.trim().startsWith("|") && lines.getOrNull(i + 1)?.matches(Regex("^\\s*\\|?\\s*:?-+.*")) == true -> {
                 flush()
                 val body = mutableListOf<String>()
                 while (i < lines.size && lines[i].trim().startsWith("|")) body += lines[i++]
                 i--
-                out += Block.Code("table", body.joinToString("\n"))
+                out += Block.Table(body.joinToString("\n"))
             }
             Regex("^\\s{0,3}(#{1,6})\\s+(.*)").matches(line) -> {
                 flush()
                 val m = Regex("^\\s{0,3}(#{1,6})\\s+(.*?)\\s*#*\\s*$").find(line)!!
                 out += Block.Heading(m.groupValues[1].length, m.groupValues[2])
+            }
+            // A tree outside a fence: a tree line now and next (or a "name/" root above one).
+            isTreeLine(lines.getOrNull(i + 1) ?: "") && (isTreeLine(line) || Regex("^\\S+/$").matches(line.trim())) -> {
+                flush()
+                val body = mutableListOf(line)
+                i++
+                while (i < lines.size && isTreeLine(lines[i])) body += lines[i++]
+                i--
+                out += Block.Tree(body.joinToString("\n"))
             }
             Regex("^\\s{0,3}([-*_])(\\s*\\1){2,}\\s*$").matches(line) -> {
                 flush()
@@ -92,8 +124,14 @@ fun blocks(text: String): List<Block> {
             Regex("^(\\s*)([-*+]|\\d{1,9}[.)])\\s+(.*)").matches(line) -> {
                 flush()
                 val m = Regex("^(\\s*)([-*+]|\\d{1,9}[.)])\\s+(.*)").find(line)!!
-                val marker = m.groupValues[2].let { if (it[0].isDigit()) it else "•" }
-                out += Block.ListItem(marker, m.groupValues[3], m.groupValues[1].length / 2)
+                // A task: ☐ to do, ☑ done, as the TUI marks them.
+                val task = Regex("^\\[([ xX])]\\s+(.*)").find(m.groupValues[3])
+                val marker = when {
+                    task != null -> if (task.groupValues[1] == " ") "☐" else "☑"
+                    m.groupValues[2][0].isDigit() -> m.groupValues[2]
+                    else -> "•"
+                }
+                out += Block.ListItem(marker, task?.groupValues?.get(2) ?: m.groupValues[3], m.groupValues[1].length / 2)
             }
             line.isBlank() -> flush()
             else -> para.append(line).append('\n')
@@ -157,18 +195,57 @@ fun closeOpen(text: String): String {
     return out
 }
 
+/** Draws a block as the TUI does: asked of the computer at this width, answered from a cache. */
+data class Blocks(val rendered: Map<String, List<String>>, val request: (String, Int) -> Unit) {
+    fun lines(source: String, width: Int): List<String>? = rendered["$width\u0000$source"]
+}
+
+val LocalBlocks = staticCompositionLocalOf<Blocks?> { null }
+
+/** `streaming`: the reply is still being written, so its last table may not be whole yet. */
 @Composable
-fun Markdown(text: String, modifier: Modifier = Modifier) {
+fun Markdown(text: String, modifier: Modifier = Modifier, streaming: Boolean = false) {
     val parsed = remember(text) { blocks(text) }
     SelectionContainer(modifier) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            for (block in parsed) MarkdownBlock(block)
+            parsed.forEachIndexed { i, block -> MarkdownBlock(block, last = streaming && i == parsed.lastIndex) }
+        }
+    }
+}
+
+/**
+ * A block the computer draws exactly as the TUI does (code with its colours, a diff's tinted rows,
+ * a tree, a mermaid diagram, a table's grid), fitted to this screen's columns; until its answer
+ * comes (or when it cannot: an older hub), `fallback` draws it here.
+ */
+@Composable
+fun DrawnBlock(source: String, fallback: @Composable () -> Unit) {
+    val blocks = LocalBlocks.current
+    if (blocks == null) return fallback()
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val measurer = rememberTextMeasurer()
+        val style = TextStyle(fontFamily = Mono, fontSize = 12.sp)
+        val cell = remember { measurer.measure("M".repeat(20), style).size.width / 20f }
+        val cols = (constraints.maxWidth / cell).toInt().coerceIn(20, 200)
+        LaunchedEffect(source, cols) { blocks.request(source, cols) }
+        val lines = blocks.lines(source, cols)
+        if (lines.isNullOrEmpty()) return@BoxWithConstraints fallback()
+        val back = remember(lines) { ground(lines) }
+        Box(Modifier.fillMaxWidth().background(back ?: Color.Transparent)) {
+        Text(
+            remember(lines) { ansi(lines, ground = back) },
+            // Rows touch: the font's box-drawing verticals run from -0.246 to 0.979 em, so a line is
+            // under 1.225 em: drawn, a 39 px row held a 38 px stroke and left a seam; at 1.18 they overlap.
+            style = style.copy(lineHeight = 1.18.em, lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment(topRatio = 0.657f), LineHeightStyle.Trim.None)),
+            softWrap = false,
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+        )
         }
     }
 }
 
 @Composable
-private fun MarkdownBlock(block: Block) {
+private fun MarkdownBlock(block: Block, last: Boolean = false) {
     val body = MaterialTheme.typography.bodyLarge
     when (block) {
         is Block.Heading -> Text(
@@ -179,14 +256,16 @@ private fun MarkdownBlock(block: Block) {
         )
         is Block.Paragraph -> Text(inline(block.text), style = body)
         is Block.ListItem -> Row(Modifier.padding(start = (block.depth * 16).dp)) {
-            Text(block.marker, style = body, color = if (block.marker == "•") Kinoko.softRed else Kinoko.cream, modifier = Modifier.width(22.dp))
+            Text(block.marker, style = body, color = when (block.marker) { "•", "☑" -> Kinoko.softRed; "☐" -> Kinoko.muted; else -> Kinoko.cream }, modifier = Modifier.width(22.dp))
             Text(inline(block.text), style = body)
         }
         is Block.Quote -> Row(Modifier.height(IntrinsicSize.Min)) {
             Box(Modifier.width(3.dp).fillMaxHeight().background(Kinoko.muted, RoundedCornerShape(2.dp)))
             Text(inline(block.text), style = body.copy(fontStyle = FontStyle.Italic), color = Kinoko.muted, modifier = Modifier.padding(start = 10.dp))
         }
-        is Block.Code -> CodeBlock(block.lang, block.text)
+        is Block.Code -> if (block.closed && block.raw.isNotEmpty()) DrawnBlock(block.raw) { CodeBlock(block.lang, block.text) } else CodeBlock(block.lang, block.text)
+        is Block.Tree -> if (!last) DrawnBlock(block.raw) { CodeBlock("", block.raw) } else CodeBlock("", block.raw)
+        is Block.Table -> if (!last) DrawnBlock(block.raw) { CodeBlock("table", block.raw) } else CodeBlock("table", block.raw)
         Block.Rule -> HorizontalDivider(color = Kinoko.line)
     }
 }
