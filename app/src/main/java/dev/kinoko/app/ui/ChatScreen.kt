@@ -23,7 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -53,7 +53,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -113,23 +112,18 @@ fun ChatScreen(
     var draft by rememberSaveable { mutableStateOf("") }
     var menu by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
-    // The list is anchored at the bottom (reverseLayout, newest first): at the end, whatever the
-    // model writes (thinking, reply, tools) pushes the conversation up by itself, smoothly.
-    // Scrolled up, it stays where the user left it; the arrow brings them back.
-    val atEnd by remember { derivedStateOf { list.firstVisibleItemIndex == 0 && list.firstVisibleItemScrollOffset < 24 } }
-    // Reading higher up while the reply grows: the list keeps its distance from the bottom of the
-    // item at the bottom of the screen, and that item grows exactly there, so the text would
-    // creep. Its growth is scrolled away, and what the user reads stays still.
+    // Following the model: while the user is at the end, every change (thinking, reply, a tool)
+    // brings the end into view. A drag of theirs stops it and nothing moves under their finger: the
+    // new text grows below, out of sight. Back at the end (or the arrow, or sending), it follows again.
+    var follow by remember { mutableStateOf(true) }
     LaunchedEffect(list) {
-        var lastKey: Any? = null
-        var lastSize = 0
-        snapshotFlow { list.layoutInfo.visibleItemsInfo.firstOrNull()?.let { it.key to it.size } }.collect { anchor ->
-            val (key, size) = anchor ?: return@collect
-            val still = list.firstVisibleItemIndex > 0 || list.firstVisibleItemScrollOffset >= 24
-            if (key == lastKey && size > lastSize && still && !list.isScrollInProgress) list.scrollBy((size - lastSize).toFloat())
-            lastKey = key
-            lastSize = size
-        }
+        list.interactionSource.interactions.collect { if (it is DragInteraction.Start) follow = false }
+    }
+    LaunchedEffect(list) {
+        snapshotFlow { !list.canScrollForward && !list.isScrollInProgress }.collect { atEnd -> if (atEnd) follow = true }
+    }
+    LaunchedEffect(t, follow) {
+        if (follow && t.items.isNotEmpty()) list.scrollToItem(t.items.size)
     }
 
     Scaffold(
@@ -168,18 +162,18 @@ fun ChatScreen(
             Box(Modifier.weight(1f)) {
                 LazyColumn(
                     state = list,
-                    reverseLayout = true,
                     contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 16.dp),
+                    // A short conversation sits at the bottom, by the input.
                     verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.Bottom),
                     modifier = Modifier.fillMaxSize(),
                 ) {
+                    items(t.items, key = { it.key }, contentType = { it::class }) { item -> ChatItem(item) }
                     item(key = "status") {
                         androidx.compose.animation.AnimatedVisibility(t.running, enter = fadeIn(), exit = fadeOut()) { Status(t.status, t.queued) }
                     }
-                    items(t.items.asReversed(), key = { it.key }, contentType = { it::class }) { item -> ChatItem(item) }
                 }
-                androidx.compose.animation.AnimatedVisibility(!atEnd, Modifier.align(Alignment.BottomEnd).padding(16.dp), enter = fadeIn(), exit = fadeOut()) {
-                    SmallFloatingActionButton(onClick = { scope.launch { list.animateScrollToItem(0) } }, containerColor = Kinoko.raised) {
+                androidx.compose.animation.AnimatedVisibility(!follow && list.canScrollForward, Modifier.align(Alignment.BottomEnd).padding(16.dp), enter = fadeIn(), exit = fadeOut()) {
+                    SmallFloatingActionButton(onClick = { follow = true; scope.launch { list.animateScrollToItem(t.items.size) } }, containerColor = Kinoko.raised) {
                         Icon(Icons.Outlined.KeyboardArrowDown, "to the end", tint = Kinoko.cream)
                     }
                 }
@@ -208,7 +202,7 @@ fun ChatScreen(
                     } else if (text.isNotEmpty() && onSay(text)) {
                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         draft = ""
-                        scope.launch { list.animateScrollToItem(0) }
+                        follow = true
                     }
                 },
                 onLater = {
