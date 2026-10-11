@@ -206,6 +206,11 @@ private fun AgentCard(agent: AgentInfo, modifier: Modifier) {
                         Icon(Icons.Outlined.Terminal, "in a terminal", tint = Kinoko.blue, modifier = Modifier.size(16.dp))
                     }
                 }
+                // Background shells running in it: in yellow, so they stand out.
+                agent.jobs?.let { n ->
+                    Text("⚙ $n ${if (n == 1) "shell" else "shells"}", style = MaterialTheme.typography.labelSmall, color = Kinoko.yellow, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.width(10.dp))
+                }
                 Text(ago(agent.activity), style = MaterialTheme.typography.labelSmall, color = Kinoko.muted)
             }
             Text(

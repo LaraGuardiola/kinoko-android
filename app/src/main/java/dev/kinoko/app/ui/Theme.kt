@@ -26,6 +26,7 @@ object Kinoko {
     val blue = Color(0xFF82AAFF)
     val green = Color(0xFFA6D189)
     val amber = Color(0xFFEF9F76)
+    val yellow = Color(0xFFF2CC60)
     val code = Color(0xFF89DCEB)
 }
 

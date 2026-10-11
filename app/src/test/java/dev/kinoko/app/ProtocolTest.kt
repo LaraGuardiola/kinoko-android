@@ -64,6 +64,14 @@ class ProtocolTest {
     }
 
     @Test
+    fun backgroundShellsOnTheAgent() {
+        fun agent(json: String) = dev.kinoko.app.data.AgentInfo.from(org.json.JSONObject(json))
+        assertEquals(2, agent("""{"id":"a","jobs":2}""").jobs)
+        assertNull(agent("""{"id":"a"}""").jobs)
+        assertNull(agent("""{"id":"a","jobs":0}""").jobs)
+    }
+
+    @Test
     fun slashCommands() {
         val cmds = Incoming.parse("""{"type":"commands","agent":"a","commands":[{"name":"new","description":"d","kind":"run"},{"name":"extensions","description":"e","kind":"list"}]}""") as Incoming.Commands
         assertEquals(listOf(false, true), cmds.commands.map { it.lists })
