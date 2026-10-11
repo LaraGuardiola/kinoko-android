@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,7 +34,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.Stop
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -53,6 +54,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -97,12 +99,23 @@ fun ChatScreen(
     var draft by rememberSaveable { mutableStateOf("") }
     var menu by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
-    // Follows the bottom while the reply streams, unless the user scrolled up to read.
-    val atBottom by remember { derivedStateOf { !list.canScrollForward } }
-    var follow by remember { mutableStateOf(true) }
-    LaunchedEffect(list.isScrollInProgress) { if (list.isScrollInProgress) follow = atBottom }
-    LaunchedEffect(t.items.size, (t.items.lastOrNull() as? AssistantItem)?.text?.length, t.status) {
-        if (follow && t.items.isNotEmpty()) list.scrollToItem(t.items.size)
+    // The list is anchored at the bottom (reverseLayout, newest first): at the end, whatever the
+    // model writes (thinking, reply, tools) pushes the conversation up by itself, smoothly.
+    // Scrolled up, it stays where the user left it; the arrow brings them back.
+    val atEnd by remember { derivedStateOf { list.firstVisibleItemIndex == 0 && list.firstVisibleItemScrollOffset < 24 } }
+    // Reading higher up while the reply grows: the list keeps its distance from the bottom of the
+    // item at the bottom of the screen, and that item grows exactly there, so the text would
+    // creep. Its growth is scrolled away, and what the user reads stays still.
+    LaunchedEffect(list) {
+        var lastKey: Any? = null
+        var lastSize = 0
+        snapshotFlow { list.layoutInfo.visibleItemsInfo.firstOrNull()?.let { it.key to it.size } }.collect { anchor ->
+            val (key, size) = anchor ?: return@collect
+            val still = list.firstVisibleItemIndex > 0 || list.firstVisibleItemScrollOffset >= 24
+            if (key == lastKey && size > lastSize && still && !list.isScrollInProgress) list.scrollBy((size - lastSize).toFloat())
+            lastKey = key
+            lastSize = size
+        }
     }
 
     Scaffold(
@@ -138,14 +151,20 @@ fun ChatScreen(
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).imePadding()) {
             Box(Modifier.weight(1f)) {
-                LazyColumn(state = list, contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxSize()) {
-                    items(t.items, key = { it.key }, contentType = { it::class }) { item -> ChatItem(item) }
+                LazyColumn(
+                    state = list,
+                    reverseLayout = true,
+                    contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.Bottom),
+                    modifier = Modifier.fillMaxSize(),
+                ) {
                     item(key = "status") {
                         androidx.compose.animation.AnimatedVisibility(t.running, enter = fadeIn(), exit = fadeOut()) { Status(t.status, t.queued) }
                     }
+                    items(t.items.asReversed(), key = { it.key }, contentType = { it::class }) { item -> ChatItem(item) }
                 }
-                androidx.compose.animation.AnimatedVisibility(!atBottom && !follow, Modifier.align(Alignment.BottomEnd).padding(16.dp), enter = fadeIn(), exit = fadeOut()) {
-                    SmallFloatingActionButton(onClick = { follow = true; scope.launch { list.animateScrollToItem(t.items.size) } }, containerColor = Kinoko.raised) {
+                androidx.compose.animation.AnimatedVisibility(!atEnd, Modifier.align(Alignment.BottomEnd).padding(16.dp), enter = fadeIn(), exit = fadeOut()) {
+                    SmallFloatingActionButton(onClick = { scope.launch { list.animateScrollToItem(0) } }, containerColor = Kinoko.raised) {
                         Icon(Icons.Outlined.KeyboardArrowDown, "to the end", tint = Kinoko.cream)
                     }
                 }
@@ -159,7 +178,7 @@ fun ChatScreen(
                     if (text.isNotEmpty() && onSay(text)) {
                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         draft = ""
-                        follow = true
+                        scope.launch { list.animateScrollToItem(0) }
                     }
                 },
                 onLater = {
@@ -186,9 +205,10 @@ private fun ChatItem(item: Item) {
                 )
             }
         }
-        is AssistantItem -> Column(Modifier.fillMaxWidth().animateContentSize()) {
+        // No size animation here: it would clip the line being written while it catches up.
+        is AssistantItem -> Column(Modifier.fillMaxWidth()) {
             if (item.thinking.isNotBlank()) Thinking(item.thinking, item.streaming && item.text.isBlank())
-            if (item.text.isNotBlank()) Markdown(item.text)
+            if (item.text.isNotBlank()) Markdown(if (item.streaming) closeOpen(item.text) else item.text)
         }
         is ToolItem -> ToolCard(item)
         is NoticeItem -> Text(
@@ -206,15 +226,8 @@ private fun Thinking(text: String, live: Boolean) {
     var open by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().padding(bottom = 6.dp).clickable { open = !open }.animateContentSize()) {
         Text(if (live) "thinking…" else if (open) "thought ▾" else "thought ▸", style = MaterialTheme.typography.labelSmall, color = Kinoko.muted)
-        if (open || live) Text(
-            if (open) text else text.takeLast(240),
-            fontStyle = FontStyle.Italic,
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-            color = Kinoko.muted,
-            maxLines = if (open) Int.MAX_VALUE else 3,
-            overflow = TextOverflow.Ellipsis,
-        )
+        // While it is being written, all of it, growing like the reply; folded once it is done.
+        if (open || live) Text(text, fontStyle = FontStyle.Italic, fontSize = 14.sp, lineHeight = 20.sp, color = Kinoko.muted)
     }
 }
 
@@ -283,7 +296,7 @@ private fun Composer(draft: String, onDraft: (String) -> Unit, running: Boolean,
         Spacer(Modifier.width(8.dp))
         if (running) {
             FilledIconButton(onClick = onAbort, modifier = Modifier.size(52.dp), shape = CircleShape, colors = IconButtonDefaults.filledIconButtonColors(containerColor = Kinoko.red)) {
-                Icon(Icons.Outlined.Stop, "stop the run", tint = Kinoko.cream)
+                Icon(Icons.Filled.Stop, "stop the run", tint = Kinoko.cream)
             }
             if (draft.isNotBlank()) {
                 Spacer(Modifier.width(6.dp))

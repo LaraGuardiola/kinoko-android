@@ -1,4 +1,4 @@
-# kinoko for Android 🍄
+# Kinoko for Android 🍄
 
 Your [kinoko](https://github.com/LaraGuardiola/kinoko) agents, from your phone, anywhere. Not a
 picture of a terminal: the app gets the agents' events as they happen (each token, each tool call)

@@ -12,6 +12,7 @@ import androidx.camera.view.PreviewView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -53,7 +54,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import dev.kinoko.app.R
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -87,9 +90,9 @@ fun PairScreen(busy: Boolean, error: String?, onLink: (String) -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Spacer(Modifier.height(36.dp))
-        Text("🍄", fontSize = 64.sp)
-        Text("kinoko", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = Kinoko.cream)
+        Spacer(Modifier.height(12.dp))
+        Image(painterResource(R.drawable.ic_launcher_foreground), contentDescription = null, modifier = Modifier.size(150.dp))
+        Text("Kinoko", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = Kinoko.cream)
         Text(
             "Your agents, from anywhere. On your computer run\nkinoko serve\nand scan the code it shows.",
             style = MaterialTheme.typography.bodyMedium,

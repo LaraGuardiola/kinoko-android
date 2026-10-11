@@ -120,7 +120,7 @@ fun AgentsScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("kinoko 🍄", fontWeight = FontWeight.Bold, color = Kinoko.cream)
+                        Text("Kinoko 🍄", fontWeight = FontWeight.Bold, color = Kinoko.cream)
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             ConnectionDot(connection)
                             Text(
