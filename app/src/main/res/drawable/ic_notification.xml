@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The status-bar mushroom: one colour, as Android draws small icons. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M3,12.5 Q3,4 12,3.5 Q21,4 21,12.5 Q12,14 3,12.5 Z M9.5,13.6 L14.5,13.6 Q15,17.5 15.6,20 Q12,21.4 8.4,20 Q9,17.5 9.5,13.6 Z" />
+</vector>

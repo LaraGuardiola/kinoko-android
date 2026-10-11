@@ -3,9 +3,13 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
+        android:name=".KinokoApp"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
@@ -30,5 +34,10 @@
                 <data android:scheme="kinoko" android:host="pair" />
             </intent-filter>
         </activity>
+        <!-- Keeps the connection to the computer open in the background: agents can say they finished. -->
+        <service
+            android:name=".HubService"
+            android:exported="false"
+            android:foregroundServiceType="remoteMessaging" />
     </application>
 </manifest>

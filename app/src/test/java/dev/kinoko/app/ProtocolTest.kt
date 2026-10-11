@@ -26,7 +26,20 @@ class ProtocolTest {
         val hub = Hub("https://omarchy.tail1.ts.net:8443", "t", "phone")
         assertEquals("wss://omarchy.tail1.ts.net:8443/v1/ws", hub.ws)
         assertEquals("omarchy.tail1.ts.net:8443", hub.host)
+        assertEquals("omarchy", hub.shortHost)
+        assertEquals("127.0.0.1", Hub("http://127.0.0.1:7878", "t", "x").shortHost)
         assertEquals("ws://127.0.0.1:7878/v1/ws", Hub("http://127.0.0.1:7878", "t", "x").ws)
+    }
+
+    @Test
+    fun runsThatEnded() {
+        fun agent(id: String, state: String, ended: String? = null) =
+            dev.kinoko.app.data.AgentInfo.from(org.json.JSONObject().put("id", id).put("state", state).put("project", "p").apply { if (ended != null) put("ended", ended) })
+        val before = listOf(agent("a", "running"), agent("b", "idle"), agent("c", "running"))
+        val after = listOf(agent("a", "idle", "done"), agent("b", "idle"), agent("c", "running"), agent("d", "idle"))
+        val done = dev.kinoko.app.data.ended(before, after)
+        assertEquals(listOf("a"), done.map { it.id })
+        assertEquals("done", done.single().ended)
     }
 
     @Test
