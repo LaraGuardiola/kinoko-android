@@ -13,6 +13,10 @@ buttons are real ones.
 - **Notifications**: an agent that finishes, stops or fails while the app is not on screen says so,
   with how its reply began; tap to open its chat. A quiet "Listening" notification stays while the
   app keeps the connection open in the background (Disconnect ends it until you open the app).
+- **Approvals**: when the agent wants to run something gated (`sudo`, `rm -rf`… with
+  permission-gate), a card above the input shows the command and why: Allow, Deny or For this
+  session. In the background it is a notification. The first answer wins (the terminal's too), and
+  the card and the notification go when anyone answers.
 - **Slash commands**: type `/` for the agent's commands (new, compact, thinking, models,
   extensions, skills, session, clear, fork, help); lists open in a panel above the input.
 - **Blocks as in the terminal**: code with its colours, diffs (tinted rows, the changed words

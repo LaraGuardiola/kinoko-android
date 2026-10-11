@@ -14,6 +14,8 @@ import dev.kinoko.app.data.Incoming
 import dev.kinoko.app.data.PairingLink
 import dev.kinoko.app.data.Project
 import dev.kinoko.app.data.Transcript
+import dev.kinoko.app.data.answered
+import dev.kinoko.app.data.asking
 import dev.kinoko.app.data.ended
 import dev.kinoko.app.data.pair
 import kotlinx.coroutines.CoroutineScope
@@ -86,6 +88,9 @@ class HubCore(private val app: Application, private val foreground: () -> Boolea
             is Incoming.Agents -> {
                 // A run that ended while nobody was looking at the app: said in a notification.
                 if (!foreground()) ended(_state.value.agents, msg.agents).forEach(notifier::finished)
+                // A call waiting for an answer: asked in a notification; answered anywhere, it goes.
+                if (!foreground()) asking(_state.value.agents, msg.agents).forEach(notifier::approval)
+                answered(_state.value.agents, msg.agents).forEach(notifier::answered)
                 _state.update { it.copy(agents = msg.agents) }
             }
             is Incoming.Projects -> _state.update { it.copy(projects = msg.projects, projectsLoading = false) }
@@ -258,6 +263,14 @@ class HubCore(private val app: Application, private val foreground: () -> Boolea
     fun abort() {
         val agent = _state.value.open ?: return
         send("abort") { put("agent", agent) }
+    }
+
+    /** Answers a call waiting in `agent`: run it or not; `remember` allows the same call for the session. */
+    fun approve(agent: String, request: String, allow: Boolean, remember: Boolean = false) = send("approve") {
+        put("agent", agent)
+        put("request", request)
+        put("allow", allow)
+        put("remember", remember)
     }
 
     fun stop(agent: String) {
