@@ -43,7 +43,7 @@ class Notifier(private val context: Context) {
         NotificationManagerCompat.from(context).notify(agent.id.hashCode(), notification)
     }
 
-    /** A call waiting for the user: tapping it opens the chat, where the card answers it. */
+    /** A call waiting for the user: answered from its actions, or tapped to open the chat's card. */
     fun approval(agent: AgentInfo) {
         val ask = agent.approval ?: return
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
@@ -56,6 +56,9 @@ class Notifier(private val context: Context) {
             .setColor(0xFFE82424.toInt())
             .setAutoCancel(true)
             .setContentIntent(open(agent.id))
+            .addAction(0, "Allow", ApprovalReceiver.answer(context, agent.id, ask.id, allow = true, remember = false))
+            .addAction(0, "Deny", ApprovalReceiver.answer(context, agent.id, ask.id, allow = false, remember = false))
+            .addAction(0, "This session", ApprovalReceiver.answer(context, agent.id, ask.id, allow = true, remember = true))
             .build()
         NotificationManagerCompat.from(context).notify(approvalTag(ask.id), notification)
     }
