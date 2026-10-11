@@ -49,6 +49,9 @@ class ProtocolTest {
         assertEquals("off web", dev.kinoko.app.ui.tapArg("extensions", item(true, true)))
         assertEquals("on web", dev.kinoko.app.ui.tapArg("skills", item(true, false)))
         assertEquals("web", dev.kinoko.app.ui.tapArg("thinking", item(false, false)))
+        assertEquals("web", dev.kinoko.app.ui.tapArg("models", item(false, false)))
+        val cleared = Incoming.parse("""{"type":"command_result","agent":"a","result":{"text":"cleared","clear":true}}""") as Incoming.Ran
+        assertTrue(cleared.result.clear)
     }
 
     @Test

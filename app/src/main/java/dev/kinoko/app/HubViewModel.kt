@@ -91,6 +91,8 @@ class HubViewModel(app: Application) : AndroidViewModel(app) {
                     _state.update { it.copy(transcripts = it.transcripts - msg.agent, panel = null, panelCommand = null) }
                     attach(msg.agent)
                 }
+                // /clear: this view starts empty again; the conversation itself stays on the computer.
+                if (r.clear) _state.update { it.copy(transcripts = it.transcripts + (msg.agent to Transcript())) }
                 if (r.items != null && !r.reset) _state.update { it.copy(panel = r) }
                 else {
                     _state.update { it.copy(panel = null, panelCommand = null) }

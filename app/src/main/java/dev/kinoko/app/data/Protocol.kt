@@ -103,7 +103,7 @@ data class CommandInfo(val name: String, val description: String, val kind: Stri
 
 data class CommandItem(val name: String, val description: String, val current: Boolean, val off: Boolean, val installed: Boolean, val shared: Boolean)
 
-data class CommandResult(val title: String?, val text: String?, val items: List<CommandItem>?, val hint: String?, val reset: Boolean) {
+data class CommandResult(val title: String?, val text: String?, val items: List<CommandItem>?, val hint: String?, val reset: Boolean, val clear: Boolean = false) {
     companion object {
         fun from(o: JSONObject) = CommandResult(
             title = o.optStringOrNull("title"),
@@ -113,6 +113,7 @@ data class CommandResult(val title: String?, val text: String?, val items: List<
             },
             hint = o.optStringOrNull("hint"),
             reset = o.optBoolean("reset"),
+            clear = o.optBoolean("clear"),
         )
     }
 }
