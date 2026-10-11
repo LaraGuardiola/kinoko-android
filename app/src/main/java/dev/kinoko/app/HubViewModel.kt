@@ -6,6 +6,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.kinoko.app.data.AgentInfo
 import dev.kinoko.app.data.AgentState
+import dev.kinoko.app.data.CommandInfo
+import dev.kinoko.app.data.CommandResult
 import dev.kinoko.app.data.Connection
 import dev.kinoko.app.data.Hub
 import dev.kinoko.app.data.HubClient
@@ -33,6 +35,13 @@ data class UiState(
     val transcripts: Map<String, Transcript> = emptyMap(),
     val pairing: Boolean = false,
     val pairingError: String? = null,
+    /** The slash commands each agent takes. */
+    val commands: Map<String, List<CommandInfo>> = emptyMap(),
+    /** A command's answer with items to act on, shown above the input; null when closed. */
+    val panel: CommandResult? = null,
+    /** Which command the panel belongs to (to act on its items). */
+    val panelCommand: String? = null,
+    val commandBusy: Boolean = false,
 )
 
 class HubViewModel(app: Application) : AndroidViewModel(app) {
@@ -73,7 +82,27 @@ class HubViewModel(app: Application) : AndroidViewModel(app) {
                 // An agent this device started: open its chat, empty and ready.
                 _state.update { it.copy(open = started.id, transcripts = it.transcripts + (started.id to Transcript())) }
             }
-            is Incoming.Error -> _messages.trySend(msg.detail)
+            is Incoming.Commands -> _state.update { it.copy(commands = it.commands + (msg.agent to msg.commands)) }
+            is Incoming.Ran -> {
+                val r = msg.result
+                _state.update { it.copy(commandBusy = false) }
+                if (r.reset) {
+                    // A new conversation: what the chat showed is gone; fetch it again.
+                    _state.update { it.copy(transcripts = it.transcripts - msg.agent, panel = null, panelCommand = null) }
+                    attach(msg.agent)
+                }
+                // /clear: this view starts empty again; the conversation itself stays on the computer.
+                if (r.clear) _state.update { it.copy(transcripts = it.transcripts + (msg.agent to Transcript())) }
+                if (r.items != null && !r.reset) _state.update { it.copy(panel = r) }
+                else {
+                    _state.update { it.copy(panel = null, panelCommand = null) }
+                    r.text?.let { _messages.trySend(it) }
+                }
+            }
+            is Incoming.Error -> {
+                _state.update { it.copy(commandBusy = false) }
+                if (msg.id?.startsWith("commands:") != true) _messages.trySend(msg.detail)
+            }
         }
     }
 
@@ -122,9 +151,28 @@ class HubViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun open(agent: String) {
-        _state.update { it.copy(open = agent) }
+        _state.update { it.copy(open = agent, panel = null, panelCommand = null) }
         attach(agent)
+        // A hub older than slash commands answers this with an error: then there are none, quietly.
+        send("commands") {
+            put("id", "commands:$agent")
+            put("agent", agent)
+        }
     }
+
+    /** A slash command for the open agent: `arg` acts on a list's item ("off web", "high"). */
+    fun command(name: String, arg: String = "") {
+        val agent = _state.value.open ?: return
+        _state.update { it.copy(commandBusy = true, panelCommand = name) }
+        val sent = send("command") {
+            put("agent", agent)
+            put("name", name)
+            put("arg", arg)
+        }
+        if (!sent) _state.update { it.copy(commandBusy = false) }
+    }
+
+    fun closePanel() = _state.update { it.copy(panel = null, panelCommand = null) }
 
     private fun attach(agent: String) = send("attach") { put("agent", agent) }
 

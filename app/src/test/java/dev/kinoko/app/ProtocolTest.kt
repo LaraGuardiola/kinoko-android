@@ -30,6 +30,31 @@ class ProtocolTest {
     }
 
     @Test
+    fun slashCommands() {
+        val cmds = Incoming.parse("""{"type":"commands","agent":"a","commands":[{"name":"new","description":"d","kind":"run"},{"name":"extensions","description":"e","kind":"list"}]}""") as Incoming.Commands
+        assertEquals(listOf(false, true), cmds.commands.map { it.lists })
+        val ran = Incoming.parse("""{"type":"command_result","id":"7","agent":"a","result":{"title":"Extensions","text":"web off: unloaded","items":[{"name":"web","description":"w","installed":true,"current":false,"off":true}],"hint":"h"}}""") as Incoming.Ran
+        val web = ran.result.items!!.single()
+        assertTrue(web.off && web.installed && !web.current)
+        assertEquals("web off: unloaded", ran.result.text)
+        val reset = Incoming.parse("""{"type":"command_result","agent":"a","result":{"text":"new session","reset":true}}""") as Incoming.Ran
+        assertTrue(reset.result.reset)
+        assertNull(reset.result.items)
+    }
+
+    @Test
+    fun aTapAsksWhatTheItemNeeds() {
+        val item = { installed: Boolean, current: Boolean -> dev.kinoko.app.data.CommandItem("web", "", current, installed && !current, installed, false) }
+        assertEquals("install web", dev.kinoko.app.ui.tapArg("extensions", item(false, false)))
+        assertEquals("off web", dev.kinoko.app.ui.tapArg("extensions", item(true, true)))
+        assertEquals("on web", dev.kinoko.app.ui.tapArg("skills", item(true, false)))
+        assertEquals("web", dev.kinoko.app.ui.tapArg("thinking", item(false, false)))
+        assertEquals("web", dev.kinoko.app.ui.tapArg("models", item(false, false)))
+        val cleared = Incoming.parse("""{"type":"command_result","agent":"a","result":{"text":"cleared","clear":true}}""") as Incoming.Ran
+        assertTrue(cleared.result.clear)
+    }
+
+    @Test
     fun unreachableSaysWhatToDo() {
         val e = java.io.IOException("connection closed")
         assertTrue(dev.kinoko.app.data.unreachable("https://omarchy.tail1.ts.net:8443", e).contains("Is Tailscale on"))
