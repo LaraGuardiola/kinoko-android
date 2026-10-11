@@ -67,8 +67,11 @@ fun CommandSuggestions(commands: List<CommandInfo>, typed: String, onPick: (Comm
 }
 
 /** What a tap on an item asks of its command: the profile chosen, an extension on, off or installed. */
+/** A list to pick one from (a thinking level, a model, a profile), not a catalog to install from. */
+fun picksOne(command: String): Boolean = command == "thinking" || command == "models" || command == "profile"
+
 fun tapArg(command: String, item: CommandItem): String = when {
-    command == "thinking" || command == "models" -> item.name
+    picksOne(command) -> item.name
     !item.installed -> "install ${item.name}"
     item.current -> "off ${item.name}"
     else -> "on ${item.name}"
@@ -104,7 +107,7 @@ fun CommandPanel(result: CommandResult, command: String, busy: Boolean, onAct: (
                 var armed by remember { mutableStateOf(false) }
                 Box {
                     Row(
-                        Modifier.fillMaxWidth().combinedClickable(enabled = !busy, onClick = { onAct(tapArg(command, item)) }, onLongClick = { if (item.installed && command != "thinking" && command != "models") menu = true })
+                        Modifier.fillMaxWidth().combinedClickable(enabled = !busy, onClick = { onAct(tapArg(command, item)) }, onLongClick = { if (item.installed && !picksOne(command)) menu = true })
                             .padding(horizontal = 16.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -114,7 +117,7 @@ fun CommandPanel(result: CommandResult, command: String, busy: Boolean, onAct: (
                         Column(Modifier.weight(1f)) {
                             // A model's id may be a whole path to a .gguf: its name is enough to choose.
                             val shown = if (command == "models") item.name.substringAfterLast('/').removeSuffix(".gguf") else item.name
-                            Text(shown, color = if (item.installed || command == "thinking" || command == "models") Kinoko.text else Kinoko.muted, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(shown, color = if (item.installed || picksOne(command)) Kinoko.text else Kinoko.muted, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(
                                 listOfNotNull(if (item.off) "off" else null, if (item.shared) "shared" else null, item.description.ifBlank { null }).joinToString(" · "),
                                 color = Kinoko.muted,
@@ -123,7 +126,7 @@ fun CommandPanel(result: CommandResult, command: String, busy: Boolean, onAct: (
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
-                        if (command != "thinking" && command != "models" && !item.installed) Text("install", style = MaterialTheme.typography.labelSmall, color = Kinoko.blue)
+                        if (!picksOne(command) && !item.installed) Text("install", style = MaterialTheme.typography.labelSmall, color = Kinoko.blue)
                     }
                     DropdownMenu(menu, { menu = false; armed = false }) {
                         DropdownMenuItem(text = { Text("Update") }, onClick = { menu = false; onAct("update ${item.name}") }, enabled = !item.shared)
