@@ -13,6 +13,9 @@ buttons are real ones.
 - **Notifications**: an agent that finishes, stops or fails while the app is not on screen says so,
   with how its reply began; tap to open its chat. A quiet "Listening" notification stays while the
   app keeps the connection open in the background (Disconnect ends it until you open the app).
+- **Files and photos**: 📎 by the input attaches a photo from the gallery, one taken now, or any
+  file. They travel with the message: the computer saves them in `~/.kinoko/uploads/` and tells the
+  agent where; a photo (shrunk to 2048 px) is also shown to the model. Up to 20 MB a message.
 - **Approvals**: when the agent wants to run something gated (`sudo`, `rm -rf`… with
   permission-gate), a card above the input shows the command and why: Allow, Deny or For this
   session. In the background it is a notification with the same three answers. The first answer

@@ -55,6 +55,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -72,6 +73,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.kinoko.app.Attachment
 import dev.kinoko.app.data.AgentInfo
 import androidx.activity.compose.BackHandler
 import dev.kinoko.app.data.AssistantItem
@@ -92,8 +94,8 @@ fun ChatScreen(
     transcript: Transcript?,
     connection: Connection,
     onBack: () -> Unit,
-    onSay: (String) -> Boolean,
-    onFollowUp: (String) -> Unit,
+    onSay: (String, List<Attachment>) -> Boolean,
+    onFollowUp: (String, List<Attachment>) -> Unit,
     onAbort: () -> Unit,
     onStop: () -> Unit,
     commands: List<CommandInfo> = emptyList(),
@@ -111,6 +113,9 @@ fun ChatScreen(
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
     var draft by rememberSaveable { mutableStateOf("") }
+    // Files picked for the next message (a photo, one just taken, any file).
+    val attachments = remember { mutableStateListOf<Attachment>() }
+    var refused by remember { mutableStateOf<String?>(null) }
     var menu by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     // Following the model: while the user is at the end, every change (thinking, reply, a tool)
@@ -191,7 +196,13 @@ fun ChatScreen(
                     onCommand(c.name, "")
                 }
             }
+            refused?.let { Text(it, color = Kinoko.softRed, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)) }
+            AttachmentChips(attachments) { attachments.remove(it) }
             Composer(
+                attach = {
+                    AttachButton(attachments.sumOf { it.size }, onPicked = { refused = null; attachments.add(it) }, onRefused = { refused = it })
+                },
+                ready = draft.isNotBlank() || attachments.isNotEmpty(),
                 draft = draft,
                 onDraft = { draft = it },
                 running = t.running,
@@ -202,15 +213,17 @@ fun ChatScreen(
                         onCommand(text.drop(1).substringBefore(' '), text.substringAfter(' ', ""))
                         keyboard?.hide()
                         draft = ""
-                    } else if (text.isNotEmpty() && onSay(text)) {
+                    } else if ((text.isNotEmpty() || attachments.isNotEmpty()) && onSay(text, attachments.toList())) {
                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         draft = ""
+                        attachments.clear()
+                        refused = null
                         follow = true
                     }
                 },
                 onLater = {
                     val text = draft.trim()
-                    if (text.isNotEmpty()) { onFollowUp(text); draft = "" }
+                    if (text.isNotEmpty() || attachments.isNotEmpty()) { onFollowUp(text, attachments.toList()); draft = ""; attachments.clear() }
                 },
                 onAbort = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); onAbort() },
             )
@@ -303,11 +316,12 @@ private fun Status(status: String?, queued: List<String>) {
 }
 
 @Composable
-private fun Composer(draft: String, onDraft: (String) -> Unit, running: Boolean, onSend: () -> Unit, onLater: () -> Unit, onAbort: () -> Unit) {
+private fun Composer(attach: @Composable () -> Unit, ready: Boolean, draft: String, onDraft: (String) -> Unit, running: Boolean, onSend: () -> Unit, onLater: () -> Unit, onAbort: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().background(Kinoko.night).navigationBarsPadding().padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.Bottom,
     ) {
+        Box(Modifier.padding(bottom = 4.dp)) { attach() }
         TextField(
             draft,
             onDraft,
@@ -327,7 +341,7 @@ private fun Composer(draft: String, onDraft: (String) -> Unit, running: Boolean,
             FilledIconButton(onClick = onAbort, modifier = Modifier.size(52.dp), shape = CircleShape, colors = IconButtonDefaults.filledIconButtonColors(containerColor = Kinoko.red)) {
                 Icon(Icons.Filled.Stop, "stop the run", tint = Kinoko.cream)
             }
-            if (draft.isNotBlank()) {
+            if (ready) {
                 Spacer(Modifier.width(6.dp))
                 Column {
                     FilledIconButton(onClick = onSend, modifier = Modifier.size(52.dp), shape = CircleShape, colors = IconButtonDefaults.filledIconButtonColors(containerColor = Kinoko.cream)) {
@@ -337,7 +351,7 @@ private fun Composer(draft: String, onDraft: (String) -> Unit, running: Boolean,
                 }
             }
         } else {
-            FilledIconButton(onClick = onSend, enabled = draft.isNotBlank(), modifier = Modifier.size(52.dp), shape = CircleShape, colors = IconButtonDefaults.filledIconButtonColors(containerColor = Kinoko.softRed)) {
+            FilledIconButton(onClick = onSend, enabled = ready, modifier = Modifier.size(52.dp), shape = CircleShape, colors = IconButtonDefaults.filledIconButtonColors(containerColor = Kinoko.softRed)) {
                 Icon(Icons.AutoMirrored.Outlined.Send, "send", tint = Kinoko.night)
             }
         }

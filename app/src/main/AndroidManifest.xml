@@ -39,6 +39,16 @@
             android:name=".HubService"
             android:exported="false"
             android:foregroundServiceType="remoteMessaging" />
+        <!-- The camera app writes a photo taken for a message into our cache through this. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
         <!-- Allow / Deny / This session on an approval's notification. -->
         <receiver
             android:name=".ApprovalReceiver"
