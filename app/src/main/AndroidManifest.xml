@@ -39,5 +39,9 @@
             android:name=".HubService"
             android:exported="false"
             android:foregroundServiceType="remoteMessaging" />
+        <!-- Allow / Deny / This session on an approval's notification. -->
+        <receiver
+            android:name=".ApprovalReceiver"
+            android:exported="false" />
     </application>
 </manifest>
