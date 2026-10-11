@@ -15,6 +15,10 @@ buttons are real ones.
   app keeps the connection open in the background (Disconnect ends it until you open the app).
 - **Slash commands**: type `/` for the agent's commands (new, compact, thinking, models,
   extensions, skills, session, clear, fork, help); lists open in a panel above the input.
+- **Blocks as in the terminal**: code with its colours, diffs (tinted rows, the changed words
+  marked), directory trees, mermaid diagrams and tables are drawn by `kinoko serve` exactly as the
+  TUI draws them (with your extensions' renderers), fitted to the phone's columns; prose stays
+  native and reflows. A block still being written shows as plain code until it is complete.
 - **Pairing**: scan the QR code `kinoko serve` shows. The token stays in the Android Keystore.
 - **Anywhere**: through Tailscale. With the Tailscale app on the phone, `kinoko serve` is reachable
   from anywhere and only by your devices; `kinoko serve --funnel` opens it to the internet for a
@@ -49,3 +53,8 @@ The release APK is signed with the debug key for now: installable by hand, not f
 
 The protocol is kinoko's [docs/protocol.md](https://github.com/LaraGuardiola/kinoko/blob/main/docs/protocol.md):
 pairing over HTTPS, then one WebSocket carrying the agent list, history and live events.
+
+## Fonts
+
+The monospace font is Noto Sans Mono (subset: Latin, punctuation, arrows, box drawing, blocks and
+shapes), under the SIL Open Font License: `licenses/NotoSansMono-OFL.txt`.

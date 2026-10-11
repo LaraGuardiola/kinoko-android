@@ -44,7 +44,13 @@ data class UiState(
     /** Which command the panel belongs to (to act on its items). */
     val panelCommand: String? = null,
     val commandBusy: Boolean = false,
+    /** Blocks the computer drew as the TUI does (code, diffs, trees, diagrams, tables), by width
+     *  and source; an empty list: it could not (an older hub), so the app draws them itself. */
+    val rendered: Map<String, List<String>> = emptyMap(),
 )
+
+/** A rendered block's key: the width it was drawn at, and its source. */
+fun blockKey(source: String, width: Int): String = "$width\u0000$source"
 
 /**
  * The app's connection to the computer and everything it knows, for as long as the process lives:
@@ -106,15 +112,24 @@ class HubCore(private val app: Application, private val foreground: () -> Boolea
                 }
                 // /clear: this view starts empty again; the conversation itself stays on the computer.
                 if (r.clear) _state.update { it.copy(transcripts = it.transcripts + (msg.agent to Transcript())) }
-                if (r.items != null && !r.reset) _state.update { it.copy(panel = r) }
+                // A list to act on, or something to read (help, session): both in the panel.
+                if ((r.items != null || r.title != null) && !r.reset) _state.update { it.copy(panel = r) }
                 else {
                     _state.update { it.copy(panel = null, panelCommand = null) }
                     r.text?.let { _messages.trySend(it) }
                 }
             }
+            is Incoming.Rendered -> {
+                val key = asked.remove(msg.id) ?: return
+                _state.update { it.copy(rendered = it.rendered + (key to msg.lines)) }
+            }
             is Incoming.Error -> {
                 _state.update { it.copy(commandBusy = false) }
-                if (msg.id?.startsWith("commands:") != true) _messages.trySend(msg.detail)
+                val key = asked.remove(msg.id)
+                when {
+                    key != null -> _state.update { it.copy(rendered = it.rendered + (key to emptyList())) } // drawn here instead
+                    msg.id?.startsWith("commands:") != true -> _messages.trySend(msg.detail)
+                }
             }
         }
     }
@@ -199,6 +214,20 @@ class HubCore(private val app: Application, private val foreground: () -> Boolea
     }
 
     fun closePanel() = _state.update { it.copy(panel = null, panelCommand = null) }
+
+    /** Render requests in flight: their id → the block's key. */
+    private val asked = HashMap<String, String>()
+    private var renders = 0
+
+    /** Asks the computer to draw a block `width` columns wide, once: the answer lands in `rendered`. */
+    fun render(source: String, width: Int) {
+        val key = blockKey(source, width)
+        if (key in _state.value.rendered || key in asked.values) return
+        val id = "render:${++renders}"
+        asked[id] = key
+        // Offline: nothing is asked, and the block stays drawn here until it can be.
+        if (client.send(JSONObject().put("id", id).put("type", "render").put("text", source).put("width", width)) == null) asked.remove(id)
+    }
 
     private fun attach(agent: String) = send("attach") { put("agent", agent) }
 

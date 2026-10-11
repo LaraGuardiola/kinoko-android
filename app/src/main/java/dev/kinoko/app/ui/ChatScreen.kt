@@ -63,6 +63,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -237,7 +238,7 @@ private fun ChatItem(item: Item) {
         // No size animation here: it would clip the line being written while it catches up.
         is AssistantItem -> Column(Modifier.fillMaxWidth()) {
             if (item.thinking.isNotBlank()) Thinking(item.thinking, item.streaming && item.text.isBlank())
-            if (item.text.isNotBlank()) Markdown(if (item.streaming) closeOpen(item.text) else item.text)
+            if (item.text.isNotBlank()) Markdown(if (item.streaming) closeOpen(item.text) else item.text, streaming = item.streaming)
         }
         is ToolItem -> ToolCard(item)
         is NoticeItem -> Text(
@@ -264,7 +265,9 @@ private fun Thinking(text: String, live: Boolean) {
 private fun ToolCard(tool: ToolItem) {
     var open by remember { mutableStateOf(false) }
     Column(
-        Modifier.fillMaxWidth().background(Kinoko.panel, RoundedCornerShape(12.dp)).clickable(enabled = tool.output != null) { open = !open }.padding(12.dp).animateContentSize(),
+        // The TUI's bands: a soft green when the tool did its job, a soft red when it failed.
+        Modifier.fillMaxWidth().background(if (tool.running) Kinoko.panel else if (tool.failed) Color(50, 30, 36) else Color(30, 44, 38), RoundedCornerShape(12.dp))
+            .clickable(enabled = tool.output != null) { open = !open }.padding(12.dp).animateContentSize(),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             when {
