@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.em
@@ -26,7 +28,10 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
@@ -223,22 +228,32 @@ fun DrawnBlock(source: String, fallback: @Composable () -> Unit) {
     val blocks = LocalBlocks.current
     if (blocks == null) return fallback()
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val measurer = rememberTextMeasurer()
-        val style = TextStyle(fontFamily = Mono, fontSize = 12.sp)
-        val cell = remember { measurer.measure("M".repeat(20), style).size.width / 20f }
+        // A cell a whole number of pixels wide: the font's advance is 0.6 em, so the size is chosen
+        // from a rounded advance. Android places each run of one style on its own and rounds where
+        // it ends; with a fractional cell, rows with more style changes drifted a pixel or two, and
+        // a diagram's verticals jogged.
+        val density = LocalDensity.current
+        val cell = remember(density) { Math.round(with(density) { 12.sp.toPx() } * 0.6f).coerceAtLeast(4).toFloat() }
+        val style = remember(density, cell) { TextStyle(fontFamily = Mono, fontSize = with(density) { (cell / 0.6f).toSp() }) }
         val cols = (constraints.maxWidth / cell).toInt().coerceIn(20, 200)
         LaunchedEffect(source, cols) { blocks.request(source, cols) }
         val lines = blocks.lines(source, cols)
         if (lines.isNullOrEmpty()) return@BoxWithConstraints fallback()
         val back = remember(lines) { ground(lines) }
+        // Rows touch: the font's box-drawing verticals run from -0.246 to 0.979 em, so a line is
+        // under 1.225 em: drawn, a 39 px row held a 38 px stroke and left a seam; at 1.18 they overlap.
+        val rowStyle = style.copy(lineHeight = 1.18.em, lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment(topRatio = 0.657f), LineHeightStyle.Trim.None))
+        val rows = remember(lines, back) { lines.map { ansi(listOf(it), ground = back) } }
+        val measurer = rememberTextMeasurer()
+        var laid by remember(lines) { mutableStateOf<TextLayoutResult?>(null) }
         Box(Modifier.fillMaxWidth().background(back ?: Color.Transparent)) {
+        // The text itself is invisible, there to be selected and copied; what shows is drawn on the grid.
         Text(
-            remember(lines) { ansi(lines, ground = back) },
-            // Rows touch: the font's box-drawing verticals run from -0.246 to 0.979 em, so a line is
-            // under 1.225 em: drawn, a 39 px row held a 38 px stroke and left a seam; at 1.18 they overlap.
-            style = style.copy(lineHeight = 1.18.em, lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment(topRatio = 0.657f), LineHeightStyle.Trim.None)),
+            remember(lines) { plain(lines) },
+            style = rowStyle.copy(color = Color.Transparent),
             softWrap = false,
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            onTextLayout = { laid = it },
+            modifier = Modifier.horizontalScroll(rememberScrollState()).cells(rows, cell, rowStyle, measurer, laid),
         )
         }
     }

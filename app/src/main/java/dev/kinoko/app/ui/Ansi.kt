@@ -4,9 +4,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextGeometricTransform
 
 // Rows kinoko drew for a terminal (SGR colours: 24-bit, 256, bold, dim, italic, underline,
 // strike), turned into styled text, so a code block, a diff or a diagram looks as in the TUI.
@@ -44,7 +44,9 @@ private data class Pen(
             // cover the bit of a │ that reaches into it from the row above, leaving seams.
             background = if (bg == null || bg == ground) Color.Unspecified else bg,
             fontWeight = if (bold) FontWeight.Bold else null,
-            fontStyle = if (italic) FontStyle.Italic else null,
+            // The mono font has no italic face: asked for one, Android took a proportional italic,
+            // narrower, and everything after it on the row slid left. A slant keeps the cells.
+            textGeometricTransform = if (italic) TextGeometricTransform(skewX = -0.2f) else null,
             textDecoration = if (decoration.isEmpty()) null else TextDecoration.combine(decoration),
         )
     }
