@@ -92,7 +92,7 @@ fun PairScreen(busy: Boolean, error: String?, onLink: (String) -> Unit) {
     ) {
         Spacer(Modifier.height(12.dp))
         Image(painterResource(R.drawable.ic_launcher_foreground), contentDescription = null, modifier = Modifier.size(150.dp))
-        Text("kinoko", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = Kinoko.cream)
+        Text("Kinoko", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = Kinoko.cream)
         Text(
             "Your agents, from anywhere. On your computer run\nkinoko serve\nand scan the code it shows.",
             style = MaterialTheme.typography.bodyMedium,
