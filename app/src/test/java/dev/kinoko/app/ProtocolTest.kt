@@ -177,4 +177,12 @@ class ProtocolTest {
         assertTrue(isFolder("~/Projects/kinoko", kin) && isFolder("/home/me/Projects/kinoko/", emptyList()) && isFolder("~", emptyList()))
         assertTrue(!isFolder("~/Projects/kin", kin) && !isFolder("/home/me/Projects/kin", kin))
     }
+
+    @Test
+    fun theProfileInUse() {
+        assertEquals("amanita", (Incoming.parse("""{"type":"hello","version":"1","device":{"name":"p"},"agents":[],"profile":"amanita"}""") as Incoming.Hello).profile)
+        assertNull((Incoming.parse("""{"type":"hello","version":"1","device":{"name":"p"},"agents":[]}""") as Incoming.Hello).profile)
+        assertEquals(Incoming.Profile("psilocybe"), Incoming.parse("""{"type":"profile","profile":"psilocybe"}"""))
+        assertEquals(Incoming.Profile(null), Incoming.parse("""{"type":"profile","profile":null}"""))
+    }
 }
