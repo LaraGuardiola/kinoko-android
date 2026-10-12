@@ -2,8 +2,10 @@ package dev.kinoko.app.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -168,21 +170,25 @@ fun ChatScreen(
             Box(Modifier.weight(1f)) {
                 LazyColumn(
                     state = list,
-                    contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 16.dp),
+                    contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 2.dp), // + the 14dp gap before the end
                     // A short conversation sits at the bottom, by the input.
                     verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.Bottom),
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     items(t.items, key = { it.key }, contentType = { it::class }) { item -> ChatItem(item) }
-                    item(key = "status") {
-                        androidx.compose.animation.AnimatedVisibility(t.running, enter = fadeIn(), exit = fadeOut()) { Status(t.status, t.queued) }
-                    }
+                    // The end, what following scrolls to. Empty: the status is not in the list, where every
+                    // token of the reply pushed it down and the scroll brought it back, many times a second.
+                    item(key = "end") { Spacer(Modifier.fillMaxWidth()) }
                 }
                 androidx.compose.animation.AnimatedVisibility(!follow && list.canScrollForward, Modifier.align(Alignment.BottomEnd).padding(16.dp), enter = fadeIn(), exit = fadeOut()) {
                     SmallFloatingActionButton(onClick = { follow = true; scope.launch { list.animateScrollToItem(t.items.size) } }, containerColor = Kinoko.raised) {
                         Icon(Icons.Outlined.KeyboardArrowDown, "to the end", tint = Kinoko.cream)
                     }
                 }
+            }
+            // What the agent is doing, held still above the input while the reply grows.
+            AnimatedVisibility(t.running, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                Box(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) { Status(t.status, t.queued) }
             }
             // A call waiting for the user's answer comes first: the run is stuck until someone answers.
             agent?.approval?.let { ask -> ApprovalCard(ask) { allow, remember -> haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove); onApprove(ask.id, allow, remember) } }
