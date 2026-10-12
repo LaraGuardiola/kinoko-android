@@ -5,6 +5,10 @@ import dev.kinoko.app.data.Hub
 import dev.kinoko.app.data.Incoming
 import dev.kinoko.app.data.Lan
 import dev.kinoko.app.data.PairingLink
+import dev.kinoko.app.data.Project
+import dev.kinoko.app.ui.isFolder
+import dev.kinoko.app.ui.isPath
+import dev.kinoko.app.ui.matching
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -147,5 +151,30 @@ class ProtocolTest {
         assertEquals(Incoming.Error("7", "no agent a9"), Incoming.parse("""{"type":"error","id":"7","detail":"no agent a9"}"""))
         assertNull(Incoming.parse("not json"))
         assertNull(Incoming.parse("""{"type":"from_the_future"}"""))
+    }
+
+    @Test
+    fun foldersCompletingAPath() {
+        assertEquals(
+            Incoming.Folders("~/Pro", listOf("/home/me/Projects")),
+            Incoming.parse("""{"type":"folders","id":"f","path":"~/Pro","folders":["/home/me/Projects"]}"""),
+        )
+    }
+
+    @Test
+    fun startingSomewhere() {
+        assertTrue(isPath("~/Projects") && isPath("/srv") && isPath("~"))
+        assertTrue(!isPath("kinoko") && !isPath(""))
+        val projects = listOf(
+            Project("/home/me/Projects/kinoko", "kinoko", 2, emptyList()),
+            Project("/home/me/Projects/kinoko-android", "kinoko-android", 1, emptyList()),
+            Project("/home/me", "me", 0, emptyList()),
+        )
+        assertEquals(listOf("kinoko-android"), matching(projects, "KINOKO and").map { it.name })
+        assertEquals(listOf("kinoko", "kinoko-android"), matching(projects, "projects").map { it.name })
+        assertEquals(3, matching(projects, "  ").size)
+        val kin = listOf("/home/me/Projects/kinoko", "/home/me/Projects/kinoko-android")
+        assertTrue(isFolder("~/Projects/kinoko", kin) && isFolder("/home/me/Projects/kinoko/", emptyList()) && isFolder("~", emptyList()))
+        assertTrue(!isFolder("~/Projects/kin", kin) && !isFolder("/home/me/Projects/kin", kin))
     }
 }

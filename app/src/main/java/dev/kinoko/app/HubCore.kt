@@ -35,6 +35,8 @@ data class UiState(
     val agents: List<AgentInfo> = emptyList(),
     val projects: List<Project> = emptyList(),
     val projectsLoading: Boolean = false,
+    /** The folders completing what was last typed in "Start an agent in…". */
+    val folders: Incoming.Folders? = null,
     /** The agent whose chat is open. */
     val open: String? = null,
     val transcripts: Map<String, Transcript> = emptyMap(),
@@ -105,6 +107,7 @@ class HubCore(private val app: Application, private val foreground: () -> Boolea
                 _state.update { it.copy(agents = msg.agents) }
             }
             is Incoming.Projects -> _state.update { it.copy(projects = msg.projects, projectsLoading = false) }
+            is Incoming.Folders -> _state.update { it.copy(folders = msg) }
             is Incoming.History -> _state.update {
                 val running = msg.info?.state == AgentState.RUNNING
                 it.copy(transcripts = it.transcripts + (msg.agent to Transcript.of(msg.messages, msg.live, running)))
@@ -207,6 +210,8 @@ class HubCore(private val app: Application, private val foreground: () -> Boolea
         _state.update { it.copy(projectsLoading = true) }
         if (!send("projects")) _state.update { it.copy(projectsLoading = false) }
     }
+
+    fun findFolders(path: String) = send("folders") { put("path", path) }
 
     fun start(cwd: String, session: String? = null) = send("start") {
         put("cwd", cwd)

@@ -151,6 +151,8 @@ sealed interface Incoming {
     data class Hello(val version: String, val device: String, val agents: List<AgentInfo>, val lan: Lan? = null) : Incoming
     data class Agents(val agents: List<AgentInfo>) : Incoming
     data class Projects(val projects: List<Project>) : Incoming
+    /** The folders that complete a typed path. */
+    data class Folders(val path: String, val folders: List<String>) : Incoming
     data class History(val agent: String, val info: AgentInfo?, val messages: List<Message>, val live: List<JSONObject>) : Incoming
     data class Event(val agent: String, val event: JSONObject) : Incoming
     data class Ok(val id: String?, val agent: AgentInfo?, val text: String?) : Incoming
@@ -167,6 +169,7 @@ sealed interface Incoming {
                 "hello" -> Hello(o.optString("version"), o.optJSONObject("device")?.optString("name") ?: "", agents(), Lan.from(o.optJSONObject("lan")))
                 "agents" -> Agents(agents())
                 "projects" -> Projects(o.optJSONArray("projects").objects().map(Project::from))
+                "folders" -> Folders(o.optString("path"), o.optJSONArray("folders")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList())
                 "history" -> History(
                     o.optString("agent"),
                     o.optJSONObject("info")?.let(AgentInfo::from),
