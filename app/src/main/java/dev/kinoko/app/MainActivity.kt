@@ -135,8 +135,9 @@ fun App(vm: HubCore) {
                         panel = state.panel,
                         panelCommand = state.panelCommand,
                         commandBusy = state.commandBusy,
-                        onCommand = vm::command,
                         onClosePanel = vm::closePanel,
+                        onRefreshPanel = vm::refreshPanel,
+                        onCommand = { name, arg -> vm.command(name, arg) },
                         onApprove = { request, allow, remember -> id?.let { vm.approve(it, request, allow, remember) } },
                     )
                 }
