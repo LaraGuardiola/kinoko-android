@@ -23,8 +23,8 @@ import kotlin.math.sin
 
 // Kinoko, the app's mushroom (the launcher icon's shapes, 108 units), as each profile shows it: the
 // same mushroom with its own face. Amanita goes super saiyan, Psilocybe is somewhere else entirely,
-// Shiitake codes in glasses, Morchella reviews through a monocle, Cordyceps wears a headset and
-// Mycena is gone before you blink. No profile (or one of the user's own): the plain smile.
+// Shiitake codes in glasses, Morchella reviews through round gold ones, Cordyceps conducts the
+// orchestra and Mycena is gone before you blink. No profile (or one of the user's own): the plain smile.
 
 private val CapRed = Color(0xFFE82424)
 private val Cream = Color(0xFFEEDEBA)
@@ -189,31 +189,36 @@ private fun DrawScope.coder() {
     line("M52.7,66.4 Q54,65.4 55.3,66.4", 0.9f)
 }
 
-/** The reviewer: one brow up, a monocle, not convinced. */
+/** The reviewer: round gold glasses, one brow up, not convinced. */
 private fun DrawScope.reviewer() {
     cheeks(Blush.copy(alpha = 0.4f))
     eyes()
-    line("M45.6,62.8 Q49,59.8 52.2,62.2", 1.2f)
-    line("M56.4,63.4 L61.8,63.6", 1.2f)
-    drawCircle(Gold, 3.7f, Offset(59f, 67f), style = Stroke(0.9f))
-    line("M62.2,68.8 Q65.5,75 63.4,81", 0.55f, Gold)
+    for (x in EYES) drawCircle(Gold, 3.6f, Offset(x, 67f), style = Stroke(0.9f))
+    line("M52.6,66.6 Q54,65.6 55.4,66.6", 0.9f, Gold)
+    line("M45.8,62 Q49,59.4 52.2,61.4", 1.2f)
+    line("M56.2,62.6 L61.8,62.6", 1.2f)
     line("M51.4,73.6 Q54,73 56.9,73.9", 1.2f)
 }
 
-/** The orchestrator: a headset, a wink, calling the shots. */
+/** The orchestrator: conducting, baton up, a bow tie, the music around it. */
 private fun DrawScope.orchestrator() {
-    val gear = Color(0xFF6B7194)
-    line("M27,47 Q28,20 54,19.5 Q80,20 81,47", 2.4f, gear)
-    drawRoundRect(gear, Offset(22.5f, 43f), Size(7f, 12f), CornerRadius(3f))
-    drawRoundRect(gear, Offset(78.5f, 43f), Size(7f, 12f), CornerRadius(3f))
-    drawRoundRect(Ink.copy(alpha = 0.6f), Offset(22.5f, 43f), Size(7f, 12f), CornerRadius(3f), style = Stroke(0.7f))
-    drawRoundRect(Ink.copy(alpha = 0.6f), Offset(78.5f, 43f), Size(7f, 12f), CornerRadius(3f), style = Stroke(0.7f))
-    line("M26,55 Q29,74.5 46.5,74.5", 1.1f, gear)
-    drawCircle(gear, 1.5f, Offset(47.4f, 74.5f))
     cheeks()
-    line("M46.8,67.4 Q49,65.2 51.2,67.4", 1.3f) // the wink
-    eyes(only = listOf(59f))
+    eyes()
     smile()
+    // The bow tie, under the smile.
+    val bow = Color(0xFFC62828)
+    drawPath(path("M49.6,76.6 L54,78.6 L49.6,80.6 Z"), bow)
+    drawPath(path("M58.4,76.6 L54,78.6 L58.4,80.6 Z"), bow)
+    drawCircle(Color(0xFF8B0000), 1.1f, Offset(54f, 78.6f))
+    // The baton, up in the air.
+    line("M67.5,76 L70,72.8", 2.2f, Color(0xFF6B7194))
+    line("M70,72.8 L84,56", 0.9f, Color.White)
+    // The music.
+    for ((p, color) in listOf(Offset(83f, 36f) to TRIP[1], Offset(24f, 30f) to TRIP[3], Offset(74f, 22f) to TRIP[0])) {
+        drawOval(color, Offset(p.x - 2.2f, p.y - 1.5f), Size(4.4f, 3f))
+        line("M${p.x + 1.9f},${p.y} L${p.x + 1.9f},${p.y - 7.5f}", 0.9f, color)
+        line("M${p.x + 1.9f},${p.y - 7.5f} Q${p.x + 5.2f},${p.y - 5.8f} ${p.x + 4.4f},${p.y - 2.8f}", 0.9f, color)
+    }
 }
 
 /** Light and fast: eyes shut with joy, already moving. */

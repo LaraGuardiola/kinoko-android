@@ -231,7 +231,14 @@ class HubCore(private val app: Application, private val foreground: () -> Boolea
     fun open(agent: String) {
         _state.update { it.copy(open = agent, panel = null, panelCommand = null) }
         attach(agent)
-        // A hub older than slash commands answers this with an error: then there are none, quietly.
+        loadCommands()
+    }
+
+    /** The open agent's slash commands. Asked on opening it, and again on typing "/" while there are
+     *  none (one started from here opens without asking, and a starting agent cannot answer yet).
+     *  A hub older than slash commands answers with an error: then there are none, quietly. */
+    fun loadCommands() {
+        val agent = _state.value.open ?: return
         send("commands") {
             put("id", "commands:$agent")
             put("agent", agent)

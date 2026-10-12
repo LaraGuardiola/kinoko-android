@@ -109,6 +109,7 @@ fun ChatScreen(
     onCommand: (String, String) -> Unit = { _, _ -> },
     onClosePanel: () -> Unit = {},
     onRefreshPanel: () -> Unit = {},
+    onLoadCommands: () -> Unit = {},
     onApprove: (request: String, allow: Boolean, remember: Boolean) -> Unit = { _, _, _ -> },
 ) {
     BackHandler(enabled = panel != null) { onClosePanel() }
@@ -206,6 +207,9 @@ fun ChatScreen(
                     }
                 }
             }
+            // "/" with no commands known yet: asked for now.
+            val slash = draft.startsWith("/")
+            LaunchedEffect(slash) { if (slash && commands.isEmpty()) onLoadCommands() }
             // A shell's window follows its output: asked again a moment after each answer.
             if (panelCommand == "jobs" && panel != null && panel.items == null) {
                 LaunchedEffect(panel) {
