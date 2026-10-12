@@ -120,7 +120,11 @@ class ProtocolTest {
     fun unreachableSaysWhatToDo() {
         val e = java.io.IOException("connection closed")
         assertTrue(dev.kinoko.app.data.unreachable("https://omarchy.tail1.ts.net:8443", e).contains("Is Tailscale on"))
-        assertEquals("Can't reach 192.168.1.5: connection closed", dev.kinoko.app.data.unreachable("http://192.168.1.5:7878", e))
+        assertEquals("Can't reach example.org: connection closed", dev.kinoko.app.data.unreachable("http://example.org:7878", e))
+        // A home network's address, from elsewhere: join that Wi-Fi, or Tailscale on the computer.
+        assertTrue(dev.kinoko.app.data.unreachable("https://192.168.1.42:7879", e).contains("its home network"))
+        assertTrue(dev.kinoko.app.data.unreachable("https://10.0.0.7:7879", e).contains("tailscale up"))
+        assertTrue(dev.kinoko.app.data.unreachable("https://192.168.1.42:7879", javax.net.ssl.SSLHandshakeException("x")).contains("did not prove it is yours"))
     }
 
     @Test

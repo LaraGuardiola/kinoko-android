@@ -78,6 +78,9 @@ fun unreachable(url: String, e: Throwable): String {
     val host = url.substringAfter("://").substringBefore('/').substringBefore(':')
     // Its certificate is not the one the code names: someone else at that address, or an old code.
     if (e is javax.net.ssl.SSLException) return "The computer at $host did not prove it is yours (its certificate is not the one in the code). Get a new code: kinoko serve pair"
+    // A home network's address: only reachable from that network.
+    if (Regex("""^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)""").containsMatchIn(host))
+        return "Can't reach $host: that is the computer's address on its home network. Join that Wi-Fi, or, from anywhere, turn Tailscale on in the computer (tailscale up), restart kinoko serve and scan a new code."
     return if (host.endsWith(".ts.net")) "Can't reach $host. Is Tailscale on in this device? The computer is shared with your tailnet only (or run `kinoko serve --funnel`)."
     else "Can't reach $host: ${e.message ?: e.javaClass.simpleName}"
 }
