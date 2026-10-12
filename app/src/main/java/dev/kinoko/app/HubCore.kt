@@ -36,6 +36,8 @@ private const val REFRESH = "refresh"
 data class UiState(
     val hub: Hub? = null,
     val agents: List<AgentInfo> = emptyList(),
+    /** The profile in use on the computer: the header's mushroom wears its face. */
+    val profile: String? = null,
     val projects: List<Project> = emptyList(),
     val projectsLoading: Boolean = false,
     /** The folders completing what was last typed in "Start an agent in…". */
@@ -101,8 +103,9 @@ class HubCore(private val app: Application, private val foreground: () -> Boolea
                     client.update(moved)
                     _state.update { it.copy(hub = moved) }
                 }
-                _state.update { it.copy(agents = msg.agents) }
+                _state.update { it.copy(agents = msg.agents, profile = msg.profile) }
             }
+            is Incoming.Profile -> _state.update { it.copy(profile = msg.name) }
             is Incoming.Agents -> {
                 // A run that ended while nobody was looking at the app: said in a notification.
                 if (!foreground()) ended(_state.value.agents, msg.agents).forEach(notifier::finished)
@@ -228,7 +231,14 @@ class HubCore(private val app: Application, private val foreground: () -> Boolea
     fun open(agent: String) {
         _state.update { it.copy(open = agent, panel = null, panelCommand = null) }
         attach(agent)
-        // A hub older than slash commands answers this with an error: then there are none, quietly.
+        loadCommands()
+    }
+
+    /** The open agent's slash commands. Asked on opening it, and again on typing "/" while there are
+     *  none (one started from here opens without asking, and a starting agent cannot answer yet).
+     *  A hub older than slash commands answers with an error: then there are none, quietly. */
+    fun loadCommands() {
+        val agent = _state.value.open ?: return
         send("commands") {
             put("id", "commands:$agent")
             put("agent", agent)

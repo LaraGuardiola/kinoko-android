@@ -122,6 +122,7 @@ fun AgentsScreen(
     host: String,
     connection: Connection,
     agents: List<AgentInfo>,
+    profile: String?,
     projects: List<Project>,
     projectsLoading: Boolean,
     folders: Incoming.Folders?,
@@ -139,7 +140,11 @@ fun AgentsScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Kinoko 🍄", fontWeight = FontWeight.Bold, color = Kinoko.cream)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Kinoko", fontWeight = FontWeight.Bold, color = Kinoko.cream)
+                            // Ours, with the face of the profile in use.
+                            Mushroom(profile, Modifier.padding(start = 4.dp).size(38.dp))
+                        }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             ConnectionDot(connection)
                             Text(

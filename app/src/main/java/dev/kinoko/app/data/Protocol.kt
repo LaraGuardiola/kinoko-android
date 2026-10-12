@@ -148,7 +148,9 @@ data class CommandResult(val title: String?, val text: String?, val items: List<
 
 /** What the computer sends over the WebSocket. */
 sealed interface Incoming {
-    data class Hello(val version: String, val device: String, val agents: List<AgentInfo>, val lan: Lan? = null) : Incoming
+    data class Hello(val version: String, val device: String, val agents: List<AgentInfo>, val lan: Lan? = null, val profile: String? = null) : Incoming
+    /** The profile in use changed on the computer: its mushroom. */
+    data class Profile(val name: String?) : Incoming
     data class Agents(val agents: List<AgentInfo>) : Incoming
     data class Projects(val projects: List<Project>) : Incoming
     /** The folders that complete a typed path. */
@@ -166,7 +168,8 @@ sealed interface Incoming {
             val o = runCatching { JSONObject(text) }.getOrNull() ?: return null
             val agents = { o.optJSONArray("agents").objects().map(AgentInfo::from) }
             return when (o.optString("type")) {
-                "hello" -> Hello(o.optString("version"), o.optJSONObject("device")?.optString("name") ?: "", agents(), Lan.from(o.optJSONObject("lan")))
+                "hello" -> Hello(o.optString("version"), o.optJSONObject("device")?.optString("name") ?: "", agents(), Lan.from(o.optJSONObject("lan")), o.optStringOrNull("profile"))
+                "profile" -> Profile(o.optStringOrNull("profile"))
                 "agents" -> Agents(agents())
                 "projects" -> Projects(o.optJSONArray("projects").objects().map(Project::from))
                 "folders" -> Folders(o.optString("path"), o.optJSONArray("folders")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList())

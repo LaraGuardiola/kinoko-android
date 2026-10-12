@@ -110,6 +110,7 @@ fun App(vm: HubCore) {
                     host = (if ((connection as? Connection.Online)?.local == true) hub?.lan?.host else null) ?: hub?.shortHost ?: "",
                     connection = connection,
                     agents = state.agents,
+                    profile = state.profile,
                     projects = state.projects,
                     projectsLoading = state.projectsLoading,
                     folders = state.folders,
@@ -137,6 +138,7 @@ fun App(vm: HubCore) {
                         commandBusy = state.commandBusy,
                         onClosePanel = vm::closePanel,
                         onRefreshPanel = vm::refreshPanel,
+                        onLoadCommands = vm::loadCommands,
                         onCommand = { name, arg -> vm.command(name, arg) },
                         onApprove = { request, allow, remember -> id?.let { vm.approve(it, request, allow, remember) } },
                     )

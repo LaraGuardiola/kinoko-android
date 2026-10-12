@@ -125,6 +125,11 @@ fun CommandPanel(result: CommandResult, command: String, busy: Boolean, onAct: (
                         // ● in effect, ○ installed but off, nothing: not installed.
                         Box(Modifier.size(10.dp).background(if (item.current) Kinoko.softRed else if (item.off) Kinoko.line else Kinoko.panel, CircleShape))
                         Spacer(Modifier.width(12.dp))
+                        // Each profile's own mushroom.
+                        if (command == "profile") {
+                            Mushroom(item.name, Modifier.size(44.dp))
+                            Spacer(Modifier.width(10.dp))
+                        }
                         Column(Modifier.weight(1f)) {
                             // A model's id may be a whole path to a .gguf: its name is enough to choose.
                             val shown = if (command == "models") item.name.substringAfterLast('/').removeSuffix(".gguf") else item.name
