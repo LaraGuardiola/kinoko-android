@@ -94,7 +94,7 @@ fun PairScreen(busy: Boolean, error: String?, onLink: (String) -> Unit) {
         Image(painterResource(R.drawable.ic_launcher_foreground), contentDescription = null, modifier = Modifier.size(150.dp))
         Text("Kinoko", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = Kinoko.cream)
         Text(
-            "Your agents, from anywhere. On your computer run\nkinoko serve\nand scan the code it shows.",
+            "Your agents, from anywhere. On your computer run\nkinoko serve pair\nand scan the code it shows.",
             style = MaterialTheme.typography.bodyMedium,
             color = Kinoko.muted,
             textAlign = TextAlign.Center,
@@ -180,7 +180,7 @@ private fun Scanner(onCode: (String) -> Unit, onCancel: () -> Unit) {
             modifier = Modifier.fillMaxWidth(0.86f).aspectRatio(1f).clip(RoundedCornerShape(24.dp)).border(2.dp, Kinoko.cream, RoundedCornerShape(24.dp)),
         )
         Column(Modifier.align(Alignment.BottomCenter).padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Point at the code from kinoko serve", color = Kinoko.text)
+            Text("Point at the code from kinoko serve pair", color = Kinoko.text)
             TextButton(onClick = onCancel) { Text("Cancel", color = Kinoko.muted) }
         }
     }
