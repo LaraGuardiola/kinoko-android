@@ -85,6 +85,18 @@ suspend fun pair(link: PairingLink, device: String): Result<Hub> = withContext(D
     }
 }
 
+/**
+ * "Forget this computer": tells the computer first, so it forgets this device too (no stale entry
+ * there). Best effort, a few seconds at most: offline, it stays listed (`kinoko serve revoke`).
+ */
+suspend fun unpair(hub: Hub): Boolean = withContext(Dispatchers.IO) {
+    runCatching {
+        val quick = http.newBuilder().connectTimeout(4, TimeUnit.SECONDS).readTimeout(4, TimeUnit.SECONDS).build()
+        val request = Request.Builder().url("${hub.url}/v1/device").header("Authorization", "Bearer ${hub.token}").delete().build()
+        quick.newCall(request).execute().use { it.isSuccessful }
+    }.getOrDefault(false)
+}
+
 private fun exchange(link: PairingLink, device: String): Hub {
     run {
         val body = JSONObject().put("code", link.code).put("name", device).toString().toRequestBody("application/json".toMediaType())

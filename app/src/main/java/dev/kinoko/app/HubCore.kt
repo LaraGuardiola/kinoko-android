@@ -12,6 +12,7 @@ import dev.kinoko.app.data.HubClient
 import dev.kinoko.app.data.HubStore
 import dev.kinoko.app.data.Incoming
 import dev.kinoko.app.data.PairingLink
+import dev.kinoko.app.data.unpair
 import dev.kinoko.app.data.Project
 import dev.kinoko.app.data.Transcript
 import dev.kinoko.app.data.answered
@@ -172,10 +173,16 @@ class HubCore(private val app: Application, private val foreground: () -> Boolea
     val paired: Boolean get() = _state.value.hub != null
 
     fun forget() {
+        val hub = _state.value.hub
         HubService.stop(app)
         client.disconnect()
         store.clear()
         _state.value = UiState()
+        // Here it is forgotten at once; the computer is told after, and says whether it heard.
+        if (hub != null) viewModelScope.launch {
+            val told = unpair(hub)
+            _messages.trySend(if (told) "${hub.shortHost} forgot this device too" else "Forgotten here. ${hub.shortHost} still lists it: kinoko serve revoke there")
+        }
     }
 
     fun nudge() = client.nudge()
