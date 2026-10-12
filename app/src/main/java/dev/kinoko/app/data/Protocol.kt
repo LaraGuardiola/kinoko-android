@@ -148,7 +148,7 @@ data class CommandResult(val title: String?, val text: String?, val items: List<
 
 /** What the computer sends over the WebSocket. */
 sealed interface Incoming {
-    data class Hello(val version: String, val device: String, val agents: List<AgentInfo>) : Incoming
+    data class Hello(val version: String, val device: String, val agents: List<AgentInfo>, val lan: Lan? = null) : Incoming
     data class Agents(val agents: List<AgentInfo>) : Incoming
     data class Projects(val projects: List<Project>) : Incoming
     data class History(val agent: String, val info: AgentInfo?, val messages: List<Message>, val live: List<JSONObject>) : Incoming
@@ -164,7 +164,7 @@ sealed interface Incoming {
             val o = runCatching { JSONObject(text) }.getOrNull() ?: return null
             val agents = { o.optJSONArray("agents").objects().map(AgentInfo::from) }
             return when (o.optString("type")) {
-                "hello" -> Hello(o.optString("version"), o.optJSONObject("device")?.optString("name") ?: "", agents())
+                "hello" -> Hello(o.optString("version"), o.optJSONObject("device")?.optString("name") ?: "", agents(), Lan.from(o.optJSONObject("lan")))
                 "agents" -> Agents(agents())
                 "projects" -> Projects(o.optJSONArray("projects").objects().map(Project::from))
                 "history" -> History(
@@ -204,7 +204,22 @@ fun answered(before: List<AgentInfo>, after: List<AgentInfo>): List<String> {
 }
 
 /** A pairing link from the computer's QR code: kinoko://pair?u=<url>&c=<code>. */
-data class PairingLink(val url: String, val code: String) {
+/** The computer on the local network: its https address and its certificate's fingerprint (pinned). */
+data class Lan(val url: String, val pin: String) {
+    val ws: String get() = url.replaceFirst("https://", "wss://") + "/v1/ws"
+    val host: String get() = url.substringAfter("://").substringBefore('/').substringBefore(':')
+
+    companion object {
+        /** `{"urls": [...], "fingerprint": "..."}` as hello and pairing send it. */
+        fun from(o: JSONObject?): Lan? {
+            val url = o?.optJSONArray("urls")?.optString(0)?.takeIf { it.startsWith("https://") } ?: return null
+            val pin = o.optString("fingerprint").takeIf { it.isNotBlank() } ?: return null
+            return Lan(url.trimEnd('/'), pin)
+        }
+    }
+}
+
+data class PairingLink(val url: String, val code: String, val lan: Lan? = null) {
     companion object {
         fun parse(text: String): PairingLink? {
             val trimmed = text.trim()
@@ -216,7 +231,9 @@ data class PairingLink(val url: String, val code: String) {
             val url = params["u"]?.trimEnd('/') ?: return null
             val code = params["c"] ?: return null
             if (!url.startsWith("http://") && !url.startsWith("https://")) return null
-            return PairingLink(url, code)
+            // The local network rides along when the computer listens there: its address and pin.
+            val lan = params["l"]?.trimEnd('/')?.takeIf { it.startsWith("https://") }?.let { l -> params["f"]?.takeIf { it.isNotBlank() }?.let { Lan(l, it) } }
+            return PairingLink(url, code, lan)
         }
     }
 }

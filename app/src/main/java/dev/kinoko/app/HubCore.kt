@@ -85,7 +85,17 @@ class HubCore(private val app: Application, private val foreground: () -> Boolea
 
     private fun receive(msg: Incoming) {
         when (msg) {
-            is Incoming.Hello -> _state.update { it.copy(agents = msg.agents) }
+            is Incoming.Hello -> {
+                // The computer's local address changed (a new IP, or it listens there now): kept.
+                val hub = _state.value.hub
+                if (hub != null && msg.lan != null && msg.lan != hub.lan) {
+                    val moved = hub.copy(lan = msg.lan)
+                    store.save(moved)
+                    client.update(moved)
+                    _state.update { it.copy(hub = moved) }
+                }
+                _state.update { it.copy(agents = msg.agents) }
+            }
             is Incoming.Agents -> {
                 // A run that ended while nobody was looking at the app: said in a notification.
                 if (!foreground()) ended(_state.value.agents, msg.agents).forEach(notifier::finished)

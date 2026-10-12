@@ -26,7 +26,9 @@ buttons are real ones.
   marked), directory trees, mermaid diagrams and tables are drawn by `kinoko serve` exactly as the
   TUI draws them (with your extensions' renderers), fitted to the phone's columns; prose stays
   native and reflows. A block still being written shows as plain code until it is complete.
-- **Pairing**: scan the QR code `kinoko serve` shows. The token stays in the Android Keystore.
+- **Pairing**: scan the QR code `kinoko serve pair` shows. The token stays in the Android Keystore.
+- **At home**: straight over the local network, encrypted; the app trusts the computer's own
+  certificate only (its fingerprint comes in the QR). No Tailscale needed. The header says `· LAN`.
 - **Anywhere**: through Tailscale. With the Tailscale app on the phone, `kinoko serve` is reachable
   from anywhere and only by your devices; `kinoko serve --funnel` opens it to the internet for a
   phone without Tailscale (then only paired devices get in).
@@ -36,8 +38,8 @@ buttons are real ones.
 On the computer:
 
 ```sh
-kinoko serve          # shares itself with your tailnet; shows a QR code the first time
-kinoko serve pair     # a new QR code for another device
+kinoko serve          # the local network and your tailnet; shows a QR code the first time
+kinoko serve pair     # a new QR code for another device (starts kinoko serve if it is not running)
 ```
 
 On the phone: install the APK, open kinoko, *Scan the code*.

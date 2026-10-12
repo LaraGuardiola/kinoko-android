@@ -106,7 +106,8 @@ fun App(vm: HubCore) {
             when (target) {
                 Screen.PAIR -> PairScreen(state.pairing, state.pairingError ?: if (connection == Connection.Unpaired) "This phone is no longer paired with the computer: pair it again." else null, vm::pairWith)
                 Screen.AGENTS -> AgentsScreen(
-                    host = hub?.shortHost ?: "",
+                    // The address in use: the local one when connected over the local network.
+                    host = (if ((connection as? Connection.Online)?.local == true) hub?.lan?.host else null) ?: hub?.shortHost ?: "",
                     connection = connection,
                     agents = state.agents,
                     projects = state.projects,
