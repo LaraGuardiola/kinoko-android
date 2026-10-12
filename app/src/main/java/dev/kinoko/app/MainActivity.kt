@@ -110,6 +110,7 @@ fun App(vm: HubCore) {
                     host = (if ((connection as? Connection.Online)?.local == true) hub?.lan?.host else null) ?: hub?.shortHost ?: "",
                     connection = connection,
                     agents = state.agents,
+                    profile = state.profile,
                     projects = state.projects,
                     projectsLoading = state.projectsLoading,
                     folders = state.folders,
