@@ -112,6 +112,8 @@ fun App(vm: HubCore) {
                     agents = state.agents,
                     projects = state.projects,
                     projectsLoading = state.projectsLoading,
+                    folders = state.folders,
+                    onFolders = { vm.findFolders(it) },
                     onOpen = vm::open,
                     onStop = vm::stop,
                     onLoadProjects = vm::loadProjects,
