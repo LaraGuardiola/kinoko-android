@@ -3,6 +3,7 @@ package dev.kinoko.app
 import dev.kinoko.app.data.AgentState
 import dev.kinoko.app.data.Hub
 import dev.kinoko.app.data.Incoming
+import dev.kinoko.app.data.Lan
 import dev.kinoko.app.data.PairingLink
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -19,6 +20,24 @@ class ProtocolTest {
         assertNull(PairingLink.parse("https://example.com"))
         assertNull(PairingLink.parse("kinoko://pair?u=ftp%3A%2F%2Fx&c=1"))
         assertNull(PairingLink.parse("kinoko://pair?u=https%3A%2F%2Fx"))
+    }
+
+    @Test
+    fun `a pairing link with the local network gives its https address and pin, or none without both`() {
+        assertEquals(
+            PairingLink("https://omarchy.tail1.ts.net:8443", "c0de", Lan("https://192.168.1.42:7879", "iW7g-_x")),
+            PairingLink.parse("kinoko://pair?u=https%3A%2F%2Fomarchy.tail1.ts.net%3A8443&c=c0de&l=https%3A%2F%2F192.168.1.42%3A7879&f=iW7g-_x"),
+        )
+        assertNull(PairingLink.parse("kinoko://pair?u=https%3A%2F%2Fx&c=1&l=https%3A%2F%2F192.168.1.42%3A7879")?.lan)
+        assertNull(PairingLink.parse("kinoko://pair?u=https%3A%2F%2Fx&c=1&l=http%3A%2F%2F192.168.1.42%3A7879&f=p")?.lan)
+        assertEquals("wss://192.168.1.42:7879/v1/ws", Lan("https://192.168.1.42:7879", "p").ws)
+    }
+
+    @Test
+    fun `hello carries the local network when the computer listens there`() {
+        val hello = Incoming.parse("""{"type":"hello","version":"0.2.0","device":{"name":"tab"},"agents":[],"lan":{"urls":["https://192.168.1.42:7879"],"fingerprint":"pin"}}""") as Incoming.Hello
+        assertEquals(Lan("https://192.168.1.42:7879", "pin"), hello.lan)
+        assertNull((Incoming.parse("""{"type":"hello","version":"0.2.0","agents":[]}""") as Incoming.Hello).lan)
     }
 
     @Test
@@ -101,7 +120,11 @@ class ProtocolTest {
     fun unreachableSaysWhatToDo() {
         val e = java.io.IOException("connection closed")
         assertTrue(dev.kinoko.app.data.unreachable("https://omarchy.tail1.ts.net:8443", e).contains("Is Tailscale on"))
-        assertEquals("Can't reach 192.168.1.5: connection closed", dev.kinoko.app.data.unreachable("http://192.168.1.5:7878", e))
+        assertEquals("Can't reach example.org: connection closed", dev.kinoko.app.data.unreachable("http://example.org:7878", e))
+        // A home network's address, from elsewhere: join that Wi-Fi, or Tailscale on the computer.
+        assertTrue(dev.kinoko.app.data.unreachable("https://192.168.1.42:7879", e).contains("its home network"))
+        assertTrue(dev.kinoko.app.data.unreachable("https://10.0.0.7:7879", e).contains("tailscale up"))
+        assertTrue(dev.kinoko.app.data.unreachable("https://192.168.1.42:7879", javax.net.ssl.SSLHandshakeException("x")).contains("did not prove it is yours"))
     }
 
     @Test

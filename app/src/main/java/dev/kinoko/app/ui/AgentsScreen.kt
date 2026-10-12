@@ -126,7 +126,7 @@ fun AgentsScreen(
                             ConnectionDot(connection)
                             Text(
                                 "  " + when (connection) {
-                                    is Connection.Online -> host
+                                    is Connection.Online -> if (connection.local) "$host · LAN" else host
                                     is Connection.Connecting -> "connecting…"
                                     Connection.Unpaired -> "this phone is no longer paired"
                                     Connection.Offline -> "offline"
