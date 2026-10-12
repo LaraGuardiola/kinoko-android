@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -29,6 +30,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -68,7 +71,7 @@ fun CommandSuggestions(commands: List<CommandInfo>, typed: String, onPick: (Comm
 
 /** What a tap on an item asks of its command: the profile chosen, an extension on, off or installed. */
 /** A list to pick one from (a thinking level, a model, a profile), not a catalog to install from. */
-fun picksOne(command: String): Boolean = command == "thinking" || command == "models" || command == "profile"
+fun picksOne(command: String): Boolean = command == "thinking" || command == "models" || command == "profile" || command == "jobs"
 
 fun tapArg(command: String, item: CommandItem): String = when {
     picksOne(command) -> item.name
@@ -81,7 +84,10 @@ fun tapArg(command: String, item: CommandItem): String = when {
 @Composable
 fun CommandPanel(result: CommandResult, command: String, busy: Boolean, onAct: (String) -> Unit, onClose: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp).background(Kinoko.panel, RoundedCornerShape(16.dp)).padding(vertical = 6.dp)) {
-        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        // A shell's window: back to the list of them.
+        val window = command == "jobs" && result.items == null
+        Row(Modifier.fillMaxWidth().padding(start = if (window) 4.dp else 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (window) IconButton(onClick = { onAct("") }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "the shells", tint = Kinoko.muted) }
             Text(result.title ?: "/$command", fontWeight = FontWeight.SemiBold, color = Kinoko.cream, modifier = Modifier.weight(1f))
             if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Kinoko.cream)
             IconButton(onClick = onClose) { Icon(Icons.Outlined.Close, "close", tint = Kinoko.muted) }
@@ -98,7 +104,12 @@ fun CommandPanel(result: CommandResult, command: String, busy: Boolean, onAct: (
                         Text(r.substringAfter("  ", ""), color = Kinoko.muted, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
-            } else if (reading) Text(it, fontFamily = Mono, fontSize = 13.sp, lineHeight = 20.sp, color = Kinoko.text, modifier = Modifier.heightIn(max = PANEL_MAX).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 6.dp))
+            } else if (reading) {
+                val scroll = rememberScrollState()
+                // A shell's output: its end in sight, as it grows.
+                if (window) LaunchedEffect(scroll) { snapshotFlow { scroll.maxValue }.collect { end -> scroll.scrollTo(end) } }
+                Text(it, fontFamily = Mono, fontSize = if (window) 12.sp else 13.sp, lineHeight = if (window) 17.sp else 20.sp, color = Kinoko.text, modifier = Modifier.heightIn(max = PANEL_MAX).verticalScroll(scroll).padding(horizontal = 16.dp, vertical = 6.dp))
+            }
             else Text(it, color = Kinoko.cream, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
         }
         LazyColumn(Modifier.heightIn(max = PANEL_MAX)) {

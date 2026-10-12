@@ -30,6 +30,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
+/** The id of a panel's quiet refresh (a shell's window following its output). */
+private const val REFRESH = "refresh"
+
 data class UiState(
     val hub: Hub? = null,
     val agents: List<AgentInfo> = emptyList(),
@@ -48,6 +51,8 @@ data class UiState(
     val panel: CommandResult? = null,
     /** Which command the panel belongs to (to act on its items). */
     val panelCommand: String? = null,
+    /** What it was asked with: a shell's window asks again with it, to follow its output. */
+    val panelArg: String = "",
     val commandBusy: Boolean = false,
     /** Blocks the computer drew as the TUI does (code, diffs, trees, diagrams, tables), by width
      *  and source; an empty list: it could not (an older hub), so the app draws them itself. */
@@ -122,6 +127,8 @@ class HubCore(private val app: Application, private val foreground: () -> Boolea
             }
             is Incoming.Commands -> _state.update { it.copy(commands = it.commands + (msg.agent to msg.commands)) }
             is Incoming.Ran -> {
+                // A window's quiet refresh that comes after the panel was closed: nothing to show.
+                if (msg.id == REFRESH && _state.value.panel == null) return
                 val r = msg.result
                 _state.update { it.copy(commandBusy = false) }
                 if (r.reset) {
@@ -231,13 +238,21 @@ class HubCore(private val app: Application, private val foreground: () -> Boolea
     /** A slash command for the open agent: `arg` acts on a list's item ("off web", "high"). */
     fun command(name: String, arg: String = "") {
         val agent = _state.value.open ?: return
-        _state.update { it.copy(commandBusy = true, panelCommand = name) }
+        _state.update { it.copy(commandBusy = true, panelCommand = name, panelArg = arg) }
         val sent = send("command") {
             put("agent", agent)
             put("name", name)
             put("arg", arg)
         }
         if (!sent) _state.update { it.copy(commandBusy = false) }
+    }
+
+    /** The open panel asked again, without the spinner: a shell's output as it goes. */
+    fun refreshPanel() {
+        val s = _state.value
+        val agent = s.open ?: return
+        val name = s.panelCommand ?: return
+        client.send(JSONObject().put("type", "command").put("id", REFRESH).put("agent", agent).put("name", name).put("arg", s.panelArg))
     }
 
     fun closePanel() = _state.update { it.copy(panel = null, panelCommand = null) }

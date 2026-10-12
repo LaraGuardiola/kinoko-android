@@ -8,6 +8,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -106,6 +108,7 @@ fun ChatScreen(
     commandBusy: Boolean = false,
     onCommand: (String, String) -> Unit = { _, _ -> },
     onClosePanel: () -> Unit = {},
+    onRefreshPanel: () -> Unit = {},
     onApprove: (request: String, allow: Boolean, remember: Boolean) -> Unit = { _, _, _ -> },
 ) {
     BackHandler(enabled = panel != null) { onClosePanel() }
@@ -186,9 +189,29 @@ fun ChatScreen(
                     }
                 }
             }
-            // What the agent is doing, held still above the input while the reply grows.
-            AnimatedVisibility(t.running, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-                Box(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) { Status(t.status, t.queued) }
+            // What the agent is doing, held still above the input while the reply grows; on the right
+            // its shells in the background, a tap away from what they are doing.
+            val shells = agent?.jobs
+            AnimatedVisibility(t.running || shells != null, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.Top) {
+                    Box(Modifier.weight(1f)) { if (t.running) Status(t.status, t.queued) }
+                    if (shells != null) {
+                        Text(
+                            "⚙ $shells ${if (shells == 1) "shell" else "shells"}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Kinoko.yellow,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { keyboard?.hide(); onCommand("jobs", "") }.padding(horizontal = 8.dp, vertical = 2.dp),
+                        )
+                    }
+                }
+            }
+            // A shell's window follows its output: asked again a moment after each answer.
+            if (panelCommand == "jobs" && panel != null && panel.items == null) {
+                LaunchedEffect(panel) {
+                    delay(1500)
+                    onRefreshPanel()
+                }
             }
             // A call waiting for the user's answer comes first: the run is stuck until someone answers.
             agent?.approval?.let { ask -> ApprovalCard(ask) { allow, remember -> haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove); onApprove(ask.id, allow, remember) } }
