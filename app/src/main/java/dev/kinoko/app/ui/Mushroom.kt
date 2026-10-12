@@ -15,11 +15,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.vector.PathParser
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.sin
 
 // Kinoko, the app's mushroom (the launcher icon's shapes, 108 units), as each profile shows it: the
 // same mushroom with its own face. Amanita goes super saiyan, Psilocybe is somewhere else entirely,
@@ -94,39 +90,25 @@ private fun DrawScope.plain() {
     smile()
 }
 
-/** Super saiyan: a golden aura flaring up behind it, in flames. */
-private val TONGUES = floatArrayOf(0.6f, 1f, 0.75f, 0.95f, 0.7f, 1f, 0.8f, 0.9f, 0.65f, 1f, 0.7f, 0.85f)
+/** Super saiyan, as in Dragon Ball: a see-through aura around it, bright at its edge, flickering to
+ *  points above, and a spark or two. */
+private val AURA = path(
+    "M54,88 C30,88 18.5,72 20.5,56 C22,44 29,35 36.5,28.5 L39.5,18.5 L44.5,25.5 L49.5,12.5 L54,22 " +
+        "L58.5,12.5 L63.5,25.5 L68.5,18.5 L71.5,28.5 C79,35 86,44 87.5,56 C89.5,72 78,88 54,88 Z",
+)
 
 private fun DrawScope.aura() {
     val c = Offset(54f, 56f)
-    val polar = { a: Double, r: Double -> Offset(c.x + (r * cos(a)).toFloat(), c.y + (r * sin(a)).toFloat()) }
-    for ((grow, brush) in listOf(
-        1f to Brush.verticalGradient(listOf(Color(0xE6FFF176), Color(0xF2FFC400), Color(0xFFFFB300)), startY = 12f, endY = 84f),
-        0.8f to Brush.verticalGradient(listOf(Color(0xCCFFFDE7), Color(0xF2FFF59D)), startY = 18f, endY = 84f),
-    )) {
-        val flame = Path()
-        val n = TONGUES.size
-        // Around from the bottom: a smooth base under the mushroom, flames growing taller upwards.
-        for (i in 0..n) {
-            val a = PI / 2 + (i.toDouble() / n) * 2 * PI
-            val up = max(0.0, -sin(a))
-            val base = 30.0 * grow
-            if (i == 0) flame.moveTo(polar(a, base).x, polar(a, base).y)
-            if (i == n) break
-            val next = PI / 2 + ((i + 1).toDouble() / n) * 2 * PI
-            val tipAngle = (a + next) / 2 - 0.12 // the flames lean, as if rising
-            val tipUp = max(0.0, -sin(tipAngle))
-            val tip = base + (4 + 22 * tipUp * tipUp) * TONGUES[i] * grow
-            val p = polar(tipAngle, tip)
-            val c1 = polar(a + (next - a) * 0.25, base + (tip - base) * 0.55)
-            val c2 = polar(a + (next - a) * 0.75, base + (tip - base) * 0.35)
-            flame.quadraticTo(c1.x, c1.y, p.x, p.y)
-            val end = polar(next, base + 0 * up)
-            flame.quadraticTo(c2.x, c2.y, end.x, end.y)
-        }
-        flame.close()
-        drawPath(flame, brush)
-    }
+    // The aura lit from within, brightest at the rim (opaque enough to glow, not to go olive).
+    drawPath(AURA, Brush.radialGradient(0f to Color(0xD9FFFDE7), 0.6f to Color(0xE6FFF59D), 0.88f to Color(0xF2FFEB3B), 1f to Color(0xFFFFF176), center = c, radius = 40f))
+    drawPath(AURA, Color(0xFFFFFDE7), style = Stroke(1.1f, join = StrokeJoin.Round))
+    // Energy rising along its sides.
+    val streak = Color(0xFFFFFFFF)
+    for (d in listOf("M26,70 L28,52", "M31,78 L33,64", "M82,70 L80,52", "M77,78 L75,64", "M46,30 L47,20", "M62,30 L61,20")) line(d, 0.7f, streak)
+    // Sparks: it is that angry.
+    val spark = Color(0xFFE0F7FA)
+    line("M22,40 L26.5,44 L23.5,45.5 L28.5,50", 0.9f, spark)
+    line("M86,64 L81.5,67.5 L84.5,69 L79.5,73", 0.9f, spark)
 }
 
 /** Angry: brows down, eyes narrowed, teeth clenched, a vein on its cap. */
@@ -177,16 +159,29 @@ private fun DrawScope.narnia() {
     drawOval(Color(0xFFFF7AA8), Offset(52f, 74.6f), Size(4f, 2.2f))
 }
 
-/** The coder: glasses on. */
+/** The coder: glasses on, its laptop beside it. */
 private fun DrawScope.coder() {
     cheeks()
     eyes()
     smile()
+    laptop()
     for (x in EYES) {
         drawRoundRect(Color.White.copy(alpha = 0.12f), Offset(x - 3.7f, 63.4f), Size(7.4f, 7f), CornerRadius(2f))
         drawRoundRect(Ink, Offset(x - 3.7f, 63.4f), Size(7.4f, 7f), CornerRadius(2f), style = Stroke(0.9f))
     }
     line("M52.7,66.4 Q54,65.4 55.3,66.4", 0.9f)
+}
+
+private fun DrawScope.laptop() {
+    drawRoundRect(Color(0xFF3A3F55), Offset(66f, 64.5f), Size(19.5f, 13.5f), CornerRadius(1.4f))
+    drawRect(Ink, Offset(67.3f, 65.8f), Size(16.9f, 10.9f))
+    // Code on its screen.
+    for ((y, x2, color) in listOf(Triple(68f, 76f, Color(0xFFA6D189)), Triple(70.3f, 81f, TRIP[1]), Triple(72.6f, 79f, Color(0xFFE5B94A)), Triple(74.9f, 74f, TRIP[0]))) {
+        val indent = if (y == 70.3f || y == 72.6f) 71f else 68.6f
+        line("M$indent,$y L$x2,$y", 0.9f, color)
+    }
+    drawPath(path("M63.6,78 L87.9,78 L86.2,81.4 L65.3,81.4 Z"), Color(0xFF6B7194))
+    line("M73.4,79.7 L78.1,79.7", 0.6f, Color(0xFF3A3F55))
 }
 
 /** The reviewer: round gold glasses, one brow up, not convinced. */
