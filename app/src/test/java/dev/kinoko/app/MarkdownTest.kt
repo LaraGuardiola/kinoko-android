@@ -2,7 +2,11 @@ package dev.kinoko.app
 
 import dev.kinoko.app.ui.Block
 import dev.kinoko.app.ui.blocks
+import dev.kinoko.app.ui.Blocks
 import dev.kinoko.app.ui.closeOpen
+import dev.kinoko.app.ui.inline
+import dev.kinoko.app.ui.inlineMaths
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -57,5 +61,29 @@ class MarkdownTest {
         assertEquals(Block.Table("| a | b |\n|---|---|\n| 1 | 2 |"), b[8])
         // Still streaming: the fence is not closed, so it is not asked of the computer yet.
         assertEquals(Block.Code("ts", "const a", "```ts\nconst a", closed = false), blocks("```ts\nconst a").single())
+    }
+
+    @Test
+    fun mathBlocksAsKinokoReadsThem() {
+        val b = blocks("The roots:\n\n$$\nx = \\frac{-b}{2a}\n$$\n\\[ \\sum_k k \\]\n$\$x^2$$\nafter")
+        assertEquals(Block.Paragraph("The roots:"), b[0])
+        assertEquals(Block.Math("x = \\frac{-b}{2a}", "$$\nx = \\frac{-b}{2a}\n$$"), b[1])
+        assertEquals(Block.Math("\\sum_k k", "\\[ \\sum_k k \\]"), b[2])
+        assertEquals(Block.Math("x^2", "$\$x^2$$"), b[3])
+        assertEquals(Block.Paragraph("after"), b[4])
+        // Still streaming: as text until it closes.
+        assertEquals(listOf(Block.Paragraph("$$\nx = 1")), blocks("$$\nx = 1"))
+    }
+
+    @Test
+    fun inlineMathFoundAndDrawn() {
+        assertEquals(listOf("x^2", "\\alpha", "a+b"), inlineMaths("so \$x^2$ and \\(\\alpha\\) and $\$a+b$$, `\$y$` in code"))
+        assertEquals(emptyList<String>(), inlineMaths("costs $5 and $10, or $ 3 $"))
+        // The computer's answers: one row drawn, or the TeX back as written (no latex extension).
+        val drawn = Blocks(mapOf("200\u0000\$x^2\$" to listOf("\u001b[0mx²"), "200\u0000\$y\$" to listOf("\$y\$")), { _, _ -> })
+        assertEquals("x²", drawn.math("x^2"))
+        assertNull(drawn.math("y"))
+        assertNull(drawn.math("z")) // not answered yet
+        assertEquals("area x² or \$y\$", inline("area \$x^2$ or \$y$", math = drawn::math).text)
     }
 }
