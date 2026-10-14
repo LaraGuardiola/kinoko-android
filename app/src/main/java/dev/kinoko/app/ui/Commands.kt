@@ -38,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -73,6 +74,10 @@ fun CommandSuggestions(commands: List<CommandInfo>, typed: String, onPick: (Comm
 /** A list to pick one from (a thinking level, a model, a profile), not a catalog to install from. */
 fun picksOne(command: String): Boolean = command == "thinking" || command == "models" || command == "profile" || command == "jobs"
 
+/** The shell a /jobs window shows ("#3"), while it still runs: it can be stopped from here. */
+fun runningShell(command: String, result: CommandResult): String? =
+    if (command != "jobs" || result.items != null) null else Regex("^(#\\d+) · running").find(result.title ?: "")?.groupValues?.get(1)
+
 fun tapArg(command: String, item: CommandItem): String = when {
     picksOne(command) -> item.name
     !item.installed -> "install ${item.name}"
@@ -90,6 +95,16 @@ fun CommandPanel(result: CommandResult, command: String, busy: Boolean, onAct: (
             if (window) IconButton(onClick = { onAct("") }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "the shells", tint = Kinoko.muted) }
             Text(result.title ?: "/$command", fontWeight = FontWeight.SemiBold, color = Kinoko.cream, modifier = Modifier.weight(1f))
             if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Kinoko.cream)
+            // A running shell: stopped with two taps, as the terminal's Del twice (it ends what it started too).
+            runningShell(command, result)?.let { shell ->
+                var armed by remember(shell) { mutableStateOf(false) }
+                Text(
+                    if (armed) "Tap again to stop" else "Stop",
+                    color = Kinoko.softRed,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { if (armed) onAct("stop $shell") else armed = true }.padding(horizontal = 10.dp, vertical = 6.dp),
+                )
+            }
             IconButton(onClick = onClose) { Icon(Icons.Outlined.Close, "close", tint = Kinoko.muted) }
         }
         val reading = result.items == null

@@ -121,6 +121,15 @@ class ProtocolTest {
     }
 
     @Test
+    fun aRunningShellsWindowCanStopIt() {
+        val window = { title: String -> dev.kinoko.app.data.CommandResult(title, "tick", null, "$ sleep 30", false) }
+        assertEquals("#3", dev.kinoko.app.ui.runningShell("jobs", window("#3 · running 12s")))
+        assertNull(dev.kinoko.app.ui.runningShell("jobs", window("#3 · killed after 12s"))) // already ended
+        assertNull(dev.kinoko.app.ui.runningShell("jobs", dev.kinoko.app.data.CommandResult("Shells", null, emptyList(), null, false))) // the list
+        assertNull(dev.kinoko.app.ui.runningShell("session", window("#3 · running 12s")))
+    }
+
+    @Test
     fun unreachableSaysWhatToDo() {
         val e = java.io.IOException("connection closed")
         assertTrue(dev.kinoko.app.data.unreachable("https://omarchy.tail1.ts.net:8443", e).contains("Is Tailscale on"))

@@ -248,7 +248,9 @@ class HubCore(private val app: Application, private val foreground: () -> Boolea
     /** A slash command for the open agent: `arg` acts on a list's item ("off web", "high"). */
     fun command(name: String, arg: String = "") {
         val agent = _state.value.open ?: return
-        _state.update { it.copy(commandBusy = true, panelCommand = name, panelArg = arg) }
+        // A shell stopped from its window: the window then follows that shell, not the stop again.
+        val follow = if (name == "jobs") arg.removePrefix("stop ") else arg
+        _state.update { it.copy(commandBusy = true, panelCommand = name, panelArg = follow) }
         val sent = send("command") {
             put("agent", agent)
             put("name", name)
