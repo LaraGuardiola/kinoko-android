@@ -22,6 +22,8 @@ buttons are real ones.
   wins (the terminal's too), and the card and the notification go when anyone answers.
 - **Slash commands**: type `/` for the agent's commands (new, compact, thinking, models,
   extensions, skills, session, clear, fork, help); lists open in a panel above the input.
+- **Shells**: "⚙ N shells" above the input while the agent has background shells; a tap lists them,
+  one opens its window (its output as it goes), and Stop (tapped twice) ends it and what it started.
 - **Blocks as in the terminal**: code with its colours, diffs (tinted rows, the changed words
   marked), directory trees, mermaid diagrams, tables and LaTeX math (`$$…$$` blocks, inline `$…$`,
   with the `latex` extension) are drawn by `kinoko serve` exactly as the TUI draws them (with your
