@@ -54,7 +54,8 @@ import androidx.compose.ui.unit.sp
 
 // Markdown for the chat, drawn natively: it reflows to any width, code scrolls sideways instead
 // of wrapping, and text can be selected. The blocks a model writes: headings, paragraphs, lists,
-// quotes, rules, fenced code (tables and diagrams as code, monospaced).
+// quotes, rules, fenced code (tables and diagrams as code, monospaced), and math: $$…$$ / \[…\]
+// blocks and inline $…$ / \(…\), drawn by the computer's latex extension like its fences.
 
 sealed interface Block {
     data class Heading(val level: Int, val text: String) : Block
@@ -67,6 +68,8 @@ sealed interface Block {
     data class Table(val raw: String) : Block
     /** A directory tree outside a fence (├── lines): drawn by the computer, its guides kept. */
     data class Tree(val raw: String) : Block
+    /** A $$…$$ or \[…\] formula: `raw` as written (asked of the computer), `tex` what is copied. */
+    data class Math(val tex: String, val raw: String) : Block
     data object Rule : Block
 }
 
@@ -77,6 +80,65 @@ fun isTreeLine(line: String): Boolean {
     val at = CONNECTOR.find(line) ?: return false
     return line.substring(0, at.range.first).all { it == ' ' || it == '\t' || it == '│' || it == '|' }
 }
+
+/** A whole $$…$$ or \[…\] block starting at line `i`, read as kinoko's markdown.ts reads it: its
+ *  TeX and its last line. Open (still streaming, or never closed): null. */
+fun mathBlock(lines: List<String>, i: Int): Pair<String, Int>? {
+    val t = lines[i].trim()
+    val close = when {
+        t.startsWith("\$\$") -> "\$\$"
+        t.startsWith("\\[") -> "\\]"
+        else -> return null
+    }
+    if (t.length > 4 && t.endsWith(close)) return t.substring(2, t.length - 2).trim() to i
+    for (end in i + 1 until lines.size) {
+        val last = lines[end].trim()
+        if (!last.endsWith(close)) continue
+        return (listOf(t.substring(2)) + lines.subList(i + 1, end) + last.dropLast(2)).joinToString("\n").trim() to end
+    }
+    return null
+}
+
+/** Inline math at `i` ($…$, $$…$$, \(…\)): its TeX and where it ends. A $ only opens before a
+ *  non-space and closes after one, not before a digit, so "$5 and $10" stays money. */
+fun inlineMath(text: String, i: Int): Pair<String, Int>? {
+    for (open in listOf("\\(" to "\\)", "\$\$" to "\$\$")) {
+        if (!text.startsWith(open.first, i)) continue
+        val close = text.indexOf(open.second, i + 2)
+        return if (close > i + 2) text.substring(i + 2, close) to close + 2 else null
+    }
+    if (text.getOrNull(i) != '$' || text.getOrNull(i + 1)?.isWhitespace() != false) return null
+    var j = text.indexOf('$', i + 1)
+    while (j > i + 1) {
+        if (text[j - 1] != '\\' && !text[j - 1].isWhitespace()) {
+            return if (text.getOrNull(j + 1)?.isDigit() == true) null else text.substring(i + 1, j) to j + 1
+        }
+        j = text.indexOf('$', j + 1)
+    }
+    return null
+}
+
+/** The inline formulas in `text` (outside `code`), to ask the computer for. */
+fun inlineMaths(text: String): List<String> {
+    val out = mutableListOf<String>()
+    var i = 0
+    while (i < text.length) {
+        val close = if (text[i] == '`') text.indexOf('`', i + 1) else -1
+        val math = if (text[i] == '$' || text.startsWith("\\(", i)) inlineMath(text, i) else null
+        when {
+            close > 0 -> i = close + 1
+            math != null -> {
+                out += math.first
+                i = math.second
+            }
+            else -> i++
+        }
+    }
+    return out
+}
+
+/** Inline math as a paragraph of its own, what the computer is asked to draw on one row. */
+fun mathSource(tex: String): String? = tex.trim().takeIf { it.isNotEmpty() && '$' !in it }?.let { "\$$it\$" }
 
 fun blocks(text: String): List<Block> {
     val out = mutableListOf<Block>()
@@ -90,6 +152,7 @@ fun blocks(text: String): List<Block> {
     while (i < lines.size) {
         val line = lines[i]
         val fence = Regex("^\\s*(`{3,}|~{3,})\\s*([\\w+#.-]*)").find(line)
+        val math = if (fence == null) mathBlock(lines, i) else null
         when {
             fence != null -> {
                 flush()
@@ -100,6 +163,11 @@ fun blocks(text: String): List<Block> {
                 while (i < lines.size && !lines[i].trim().startsWith(marker)) body += lines[i++]
                 val closed = i < lines.size
                 out += Block.Code(fence.groupValues[2], body.joinToString("\n"), lines.subList(start, minOf(i + 1, lines.size)).joinToString("\n"), closed)
+            }
+            math != null -> {
+                flush()
+                out += Block.Math(math.first, lines.subList(i, math.second + 1).joinToString("\n"))
+                i = math.second
             }
             // A table: drawn by the computer as the TUI draws it (a box grid), or here as text.
             line.trim().startsWith("|") && lines.getOrNull(i + 1)?.matches(Regex("^\\s*\\|?\\s*:?-+.*")) == true -> {
@@ -152,17 +220,24 @@ fun blocks(text: String): List<Block> {
     return out
 }
 
-/** Inline spans: `code`, **bold**, *italic* / _italic_, ~~strike~~, [text](url). */
-fun inline(text: String, codeColor: androidx.compose.ui.graphics.Color = Kinoko.code): AnnotatedString = buildAnnotatedString {
+/** Inline spans: `code`, **bold**, *italic* / _italic_, ~~strike~~, [text](url), and math: `math`
+ *  gives a formula's TeX as drawn (null leaves it as written). */
+fun inline(text: String, codeColor: androidx.compose.ui.graphics.Color = Kinoko.code, math: (String) -> String? = { null }): AnnotatedString = buildAnnotatedString {
     var i = 0
     while (i < text.length) {
         val rest = text.substring(i)
+        val formula = if (text[i] == '$' || rest.startsWith("\\(")) inlineMath(text, i) else null
+        val drawn = formula?.let { math(it.first) }
         val code = Regex("^`([^`]+)`").find(rest)
         val link = Regex("^\\[([^\\]]+)\\]\\(([^)\\s]+)\\)").find(rest)
         val bold = Regex("^(\\*\\*|__)(?=\\S)(.+?)(?<=\\S)\\1").find(rest)
         val strike = Regex("^~~(?=\\S)(.+?)(?<=\\S)~~").find(rest)
         val italic = Regex("^([*_])(?=[^\\s*_])(.+?)(?<=[^\\s\\\\])\\1(?!\\1)").find(rest)
         when {
+            formula != null && drawn != null -> {
+                withStyle(SpanStyle(color = Kinoko.cream)) { append(drawn) }
+                i = formula.second
+            }
             code != null -> {
                 withStyle(SpanStyle(fontFamily = Mono, color = codeColor, fontSize = 14.sp)) { append(code.groupValues[1]) }
                 i += code.value.length
@@ -174,15 +249,15 @@ fun inline(text: String, codeColor: androidx.compose.ui.graphics.Color = Kinoko.
                 i += link.value.length
             }
             bold != null -> {
-                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = Kinoko.cream)) { append(inline(bold.groupValues[2], codeColor)) }
+                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = Kinoko.cream)) { append(inline(bold.groupValues[2], codeColor, math)) }
                 i += bold.value.length
             }
             strike != null -> {
-                withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) { append(inline(strike.groupValues[1], codeColor)) }
+                withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) { append(inline(strike.groupValues[1], codeColor, math)) }
                 i += strike.value.length
             }
             italic != null && (italic.groupValues[1] == "*" || i == 0 || !text[i - 1].isLetterOrDigit()) -> {
-                withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append(inline(italic.groupValues[2], codeColor)) }
+                withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append(inline(italic.groupValues[2], codeColor, math)) }
                 i += italic.value.length
             }
             else -> {
@@ -208,7 +283,17 @@ fun closeOpen(text: String): String {
 /** Draws a block as the TUI does: asked of the computer at this width, answered from a cache. */
 data class Blocks(val rendered: Map<String, List<String>>, val request: (String, Int) -> Unit) {
     fun lines(source: String, width: Int): List<String>? = rendered["$width\u0000$source"]
+
+    /** Inline math as the computer drew it, on one row; null until then, or when it could not
+     *  (no latex extension: the TeX comes back as written, $ and all). */
+    fun math(tex: String): String? = mathSource(tex)?.let { lines(it, MATH_WIDTH) }?.singleOrNull()
+        ?.let { plain(listOf(it)).trim() }?.takeIf { it.isNotEmpty() && !it.startsWith("$") }
+
+    fun requestMath(text: String) = inlineMaths(text).forEach { tex -> mathSource(tex)?.let { request(it, MATH_WIDTH) } }
 }
+
+/** Wide enough that a formula is never wrapped: it is one row of a line of text. */
+private const val MATH_WIDTH = 200
 
 val LocalBlocks = staticCompositionLocalOf<Blocks?> { null }
 
@@ -278,6 +363,17 @@ fun DrawnBlock(source: String, copy: String, fallback: @Composable () -> Unit) {
 @Composable
 private fun MarkdownBlock(block: Block, last: Boolean = false) {
     val body = MaterialTheme.typography.bodyLarge
+    val blocks = LocalBlocks.current
+    val inline = { text: String -> inline(text, math = { tex -> blocks?.math(tex) }) }
+    LaunchedEffect(block) {
+        when (block) {
+            is Block.Heading -> blocks?.requestMath(block.text)
+            is Block.Paragraph -> blocks?.requestMath(block.text)
+            is Block.ListItem -> blocks?.requestMath(block.text)
+            is Block.Quote -> blocks?.requestMath(block.text)
+            else -> Unit
+        }
+    }
     when (block) {
         is Block.Heading -> Text(
             inline(block.text),
@@ -295,6 +391,7 @@ private fun MarkdownBlock(block: Block, last: Boolean = false) {
             Text(inline(block.text), style = body.copy(fontStyle = FontStyle.Italic), color = Kinoko.muted, modifier = Modifier.padding(start = 10.dp))
         }
         is Block.Code -> if (block.closed && block.raw.isNotEmpty()) DrawnBlock(block.raw, block.text) { CodeBlock(block.lang, block.text) } else CodeBlock(block.lang, block.text)
+        is Block.Math -> DrawnBlock(block.raw, block.tex) { Text(block.raw, style = body) }
         is Block.Tree -> if (!last) DrawnBlock(block.raw, block.raw) { CodeBlock("", block.raw) } else CodeBlock("", block.raw)
         is Block.Table -> if (!last) DrawnBlock(block.raw, block.raw) { CodeBlock("table", block.raw) } else CodeBlock("table", block.raw)
         Block.Rule -> HorizontalDivider(color = Kinoko.line)

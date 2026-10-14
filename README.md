@@ -23,9 +23,9 @@ buttons are real ones.
 - **Slash commands**: type `/` for the agent's commands (new, compact, thinking, models,
   extensions, skills, session, clear, fork, help); lists open in a panel above the input.
 - **Blocks as in the terminal**: code with its colours, diffs (tinted rows, the changed words
-  marked), directory trees, mermaid diagrams and tables are drawn by `kinoko serve` exactly as the
-  TUI draws them (with your extensions' renderers), fitted to the phone's columns; prose stays
-  native and reflows. A block still being written shows as plain code until it is complete.
+  marked), directory trees, mermaid diagrams, tables and LaTeX math (`$$…$$` blocks, inline `$…$`,
+  with the `latex` extension) are drawn by `kinoko serve` exactly as the TUI draws them (with your
+  extensions' renderers), fitted to the phone's columns; prose stays native and reflows. A block still being written shows as plain code until it is complete.
 - **Pairing**: scan the QR code `kinoko serve pair` shows. The token stays in the Android Keystore.
 - **At home**: straight over the local network, encrypted; the app trusts the computer's own
   certificate only (its fingerprint comes in the QR). No Tailscale needed. The header says `· LAN`.
