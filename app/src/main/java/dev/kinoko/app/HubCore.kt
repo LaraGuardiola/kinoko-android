@@ -19,6 +19,8 @@ import dev.kinoko.app.data.answered
 import dev.kinoko.app.data.asking
 import dev.kinoko.app.data.ended
 import dev.kinoko.app.data.pair
+import dev.kinoko.app.data.Reading
+import dev.kinoko.app.data.Route
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -28,6 +30,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.Request
 import org.json.JSONObject
 
 /** The id of a panel's quiet refresh (a shell's window following its output). */
@@ -59,6 +63,10 @@ data class UiState(
     /** Blocks the computer drew as the TUI does (code, diffs, trees, diagrams, tables), by width
      *  and source; an empty list: it could not (an older hub), so the app draws them itself. */
     val rendered: Map<String, List<String>> = emptyMap(),
+    /** The computer can speak (GET /v1/speech): the chat shows its speaker button. */
+    val speech: Boolean = false,
+    /** The speaker button: replies of the open chat read aloud. Remembered. */
+    val speaker: Boolean = false,
 )
 
 /** A rendered block's key: the width it was drawn at, and its source. */
@@ -75,11 +83,16 @@ class HubCore(private val app: Application, private val foreground: () -> Boolea
     private val client = HubClient(viewModelScope)
     private val notifier = Notifier(app)
     val connection: StateFlow<Connection> = client.connection
-    private val _state = MutableStateFlow(UiState(hub = store.load()))
+    private val prefs = app.getSharedPreferences("voice", android.content.Context.MODE_PRIVATE)
+    private val _state = MutableStateFlow(UiState(hub = store.load(), speaker = prefs.getBoolean("speaker", false)))
     val state: StateFlow<UiState> = _state
     private val _messages = Channel<String>(Channel.BUFFERED)
     /** One-off things to tell the user (a refused command). */
     val messages = _messages.receiveAsFlow()
+
+    private val voice = Voice(app, { client.route }) { _messages.trySend(it) }
+    /** The open chat's reply, cut into sentences as it streams. */
+    private val reading = Reading()
 
     init {
         viewModelScope.launch { client.incoming.collect(::receive) }
@@ -87,6 +100,7 @@ class HubCore(private val app: Application, private val foreground: () -> Boolea
             client.connection.collect { c ->
                 // Back online: the open chat catches up on what it missed.
                 if (c is Connection.Online) _state.value.open?.let { attach(it) }
+                if (c is Connection.Online) client.route?.let { checkSpeech(it) }
             }
         }
         _state.value.hub?.let(client::connect)
@@ -120,9 +134,14 @@ class HubCore(private val app: Application, private val foreground: () -> Boolea
                 val running = msg.info?.state == AgentState.RUNNING
                 it.copy(transcripts = it.transcripts + (msg.agent to Transcript.of(msg.messages, msg.live, running)))
             }
-            is Incoming.Event -> _state.update {
+            is Incoming.Event -> {
+                val s = _state.value
+                // Only replies arriving live, for the chat on screen, with the speaker on.
+                if (s.speaker && s.speech && msg.agent == s.open) reading.apply(msg.event).forEach(voice::read)
+                _state.update {
                 val t = it.transcripts[msg.agent] ?: Transcript()
                 it.copy(transcripts = it.transcripts + (msg.agent to t.apply(msg.event)))
+                }
             }
             is Incoming.Ok -> msg.agent?.let { started ->
                 // An agent this device started: open its chat, empty and ready.
@@ -200,7 +219,8 @@ class HubCore(private val app: Application, private val foreground: () -> Boolea
         HubService.stop(app)
         client.disconnect()
         store.clear()
-        _state.value = UiState()
+        hush()
+        _state.value = UiState(speaker = _state.value.speaker)
         // Here it is forgotten at once; the computer is told after, and says whether it heard.
         if (hub != null) viewModelScope.launch {
             val told = unpair(hub)
@@ -229,6 +249,7 @@ class HubCore(private val app: Application, private val foreground: () -> Boolea
     }
 
     fun open(agent: String) {
+        hush()
         _state.update { it.copy(open = agent, panel = null, panelCommand = null) }
         attach(agent)
         loadCommands()
@@ -286,6 +307,7 @@ class HubCore(private val app: Application, private val foreground: () -> Boolea
     private fun attach(agent: String) = send("attach") { put("agent", agent) }
 
     fun close() {
+        hush()
         val agent = _state.value.open ?: return
         _state.update { it.copy(open = null) }
         send("detach") { put("agent", agent) }
@@ -295,6 +317,7 @@ class HubCore(private val app: Application, private val foreground: () -> Boolea
     fun say(text: String, files: List<Attachment> = emptyList()): Boolean {
         val agent = _state.value.open ?: return false
         val running = _state.value.transcripts[agent]?.running == true
+        hush()
         return send(if (running) "steer" else "prompt") {
             put("agent", agent)
             put("text", text)
@@ -304,6 +327,7 @@ class HubCore(private val app: Application, private val foreground: () -> Boolea
 
     fun followUp(text: String, files: List<Attachment> = emptyList()) {
         val agent = _state.value.open ?: return
+        hush()
         send("follow_up") {
             put("agent", agent)
             put("text", text)
@@ -317,6 +341,7 @@ class HubCore(private val app: Application, private val foreground: () -> Boolea
     }
 
     fun abort() {
+        hush()
         val agent = _state.value.open ?: return
         send("abort") { put("agent", agent) }
     }
@@ -329,7 +354,35 @@ class HubCore(private val app: Application, private val foreground: () -> Boolea
         put("remember", remember)
     }
 
+    /** The speaker button: on, the open chat's replies are read aloud from the next sentence on. */
+    fun toggleSpeaker() {
+        val on = !_state.value.speaker
+        prefs.edit().putBoolean("speaker", on).apply()
+        _state.update { it.copy(speaker = on) }
+        if (!on) hush()
+    }
+
+    /** Silence, now: what was being read, and what was half cut into sentences. */
+    private fun hush() {
+        voice.stop()
+        reading.reset()
+    }
+
+    /** Whether the computer can speak (an older hub, or no voice set up there: no button). */
+    private fun checkSpeech(route: Route) {
+        viewModelScope.launch {
+            val can = withContext(Dispatchers.IO) {
+                runCatching {
+                    val request = Request.Builder().url("${route.url}/v1/speech").header("Authorization", "Bearer ${route.token}").build()
+                    route.client.newCall(request).execute().use { res -> res.isSuccessful && JSONObject(res.body?.string().orEmpty()).optBoolean("available") }
+                }.getOrDefault(false)
+            }
+            _state.update { it.copy(speech = can) }
+        }
+    }
+
     fun stop(agent: String) {
+        if (_state.value.open == agent) hush()
         if (send("stop") { put("agent", agent) } && _state.value.open == agent) _state.update { it.copy(open = null) }
     }
 }

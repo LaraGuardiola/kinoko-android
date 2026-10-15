@@ -16,5 +16,7 @@ The Android app for kinoko: Kotlin, Jetpack Compose, minSdk 26. It speaks kinoko
 data/Protocol.kt     the protocol's shapes, pairing links
 data/Hub.kt          pairing, the encrypted store, the WebSocket client (reconnects by itself)
 data/Transcript.kt   the conversation built from history and events (pure)
+data/Sentences.kt    a reply cut into sentences to read aloud; data/Reading.kt: events → say/end/hush (pure)
+Voice.kt             replies read aloud: each sentence from the hub's /v1/speech into one AudioTrack
 HubViewModel.kt      state for the screens
 ui/                  Pair (QR scanner), Agents, Chat, Markdown, Theme

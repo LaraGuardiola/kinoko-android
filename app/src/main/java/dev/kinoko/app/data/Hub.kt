@@ -23,6 +23,9 @@ import okhttp3.WebSocketListener
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
+/** Where an HTTP request to the computer goes now, with this device's token. */
+class Route(val url: String, val token: String, val client: OkHttpClient)
+
 /** A paired computer: where it is, and this device's token for it. */
 data class Hub(val url: String, val token: String, val device: String, val lan: Lan? = null) {
     val host: String get() = url.substringAfter("://").substringBefore('/')
@@ -135,6 +138,10 @@ class HubClient(private val scope: CoroutineScope) {
 
     private var socket: WebSocket? = null
     private var hub: Hub? = null
+    /** How the computer is reached right now (its address, and the client that trusts it): the
+     *  HTTP requests beside the WebSocket (speech) go the same way. Null while offline. */
+    @Volatile var route: Route? = null
+        private set
     /** Each round tries the local network first, then the main address (Tailscale). */
     private var viaLan = true
     private var retry: Job? = null
@@ -162,6 +169,7 @@ class HubClient(private val scope: CoroutineScope) {
 
     fun disconnect() {
         hub = null
+        route = null
         retry?.cancel()
         socket?.close(1000, "bye")
         socket = null
@@ -189,7 +197,10 @@ class HubClient(private val scope: CoroutineScope) {
 
             override fun onMessage(webSocket: WebSocket, text: String) {
                 val msg = Incoming.parse(text) ?: return
-                if (msg is Incoming.Hello) _connection.value = Connection.Online(msg.version, local = lan != null)
+                if (msg is Incoming.Hello) {
+                    route = Route(lan?.url ?: target.url, target.token, client)
+                    _connection.value = Connection.Online(msg.version, local = lan != null)
+                }
                 _incoming.tryEmit(msg)
             }
 
@@ -215,6 +226,7 @@ class HubClient(private val scope: CoroutineScope) {
     }
 
     private fun later() {
+        route = null
         if (hub == null) return
         viaLan = true
         attempt++
