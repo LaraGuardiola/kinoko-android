@@ -141,6 +141,9 @@ fun App(vm: HubCore) {
                         onLoadCommands = vm::loadCommands,
                         onCommand = { name, arg -> vm.command(name, arg) },
                         onApprove = { request, allow, remember -> id?.let { vm.approve(it, request, allow, remember) } },
+                        speech = state.speech,
+                        speaker = state.speaker,
+                        onSpeaker = vm::toggleSpeaker,
                     )
                 }
             }

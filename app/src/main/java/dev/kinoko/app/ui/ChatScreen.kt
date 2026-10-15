@@ -33,6 +33,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.VolumeOff
+import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
@@ -111,6 +113,10 @@ fun ChatScreen(
     onRefreshPanel: () -> Unit = {},
     onLoadCommands: () -> Unit = {},
     onApprove: (request: String, allow: Boolean, remember: Boolean) -> Unit = { _, _, _ -> },
+    /** The computer can speak: the speaker button is shown. */
+    speech: Boolean = false,
+    speaker: Boolean = false,
+    onSpeaker: () -> Unit = {},
 ) {
     BackHandler(enabled = panel != null) { onClosePanel() }
     // A command's panel needs the room the keyboard takes: it goes when a command is chosen.
@@ -158,6 +164,10 @@ fun ChatScreen(
                     }
                 },
                 actions = {
+                    if (speech) IconButton(onClick = onSpeaker) {
+                        if (speaker) Icon(Icons.AutoMirrored.Outlined.VolumeUp, "stop reading replies aloud", tint = Kinoko.cream)
+                        else Icon(Icons.AutoMirrored.Outlined.VolumeOff, "read replies aloud", tint = Kinoko.muted)
+                    }
                     Box {
                         IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "menu") }
                         DropdownMenu(menu, { menu = false }) {
